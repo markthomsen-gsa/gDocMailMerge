@@ -88,7 +88,7 @@
     });
   }
   
-    // Real-time validation for spreadsheet URL
+  // Real-time validation for spreadsheet URL
   function validateSpreadsheetRealtime() {
     const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
     if (!spreadsheetUrl) return;
@@ -104,13 +104,7 @@
     if (isValidUrl || isValidId) {
       // URL/ID looks valid - enable validate button
       document.getElementById('validateBtn').disabled = false;
-      // Auto-validate after a delay
-      if (!window.validateTimeout) {
-        window.validateTimeout = setTimeout(() => {
-          validateSpreadsheet();
-          window.validateTimeout = null;
-        }, 1000);
-      }
+      // No auto-validation
     } else {
       // URL/ID doesn't look valid
       document.getElementById('validateBtn').disabled = false;
@@ -137,10 +131,12 @@
     const loadingNotification = showNotification('Validating spreadsheet...', 'info', 0);
     
     // Hide related sections
-    document.getElementById('sheetSelectGroup').classList.add('hidden');
-    document.getElementById('emailColumnGroup').classList.add('hidden');
-    document.getElementById('ccColumnGroup').classList.add('hidden');
-    document.getElementById('bccColumnGroup').classList.add('hidden');
+    toggleVisibility('loadSheetsGroup', false);
+    toggleVisibility('sheetSelectGroup', false);
+    toggleVisibility('loadColumnsGroup', false);
+    toggleVisibility('emailColumnGroup', false);
+    toggleVisibility('ccColumnGroup', false);
+    toggleVisibility('bccColumnGroup', false);
     toggleVisibility('ccBccToggleGroup', false);
     
     // Call the server function
@@ -237,17 +233,23 @@
       // Show notification for successful validation
       showNotification('Spreadsheet successfully validated', 'success', config.toastDuration);
       
-      // Load sheet names
-      loadSheetNames();
+      // Show the Load Sheets button
+      toggleVisibility('loadSheetsGroup', true);
     } else {
       showNotification(result.message || 'Error validating spreadsheet', 'error', config.toastDuration);
     }
   }
 
-  // Function to load sheet names
+  // Function to load sheet names - now called manually via button click
   function loadSheetNames() {
     // Show loading notification
     const loadingNotification = showNotification('Loading sheets...', 'info', 0);
+    
+    // Show loading state on button
+    const loadSheetsBtn = document.getElementById('loadSheetsBtn');
+    loadSheetsBtn.disabled = true;
+    const btnText = loadSheetsBtn.textContent || loadSheetsBtn.innerText;
+    loadSheetsBtn.innerHTML = `<span class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span> ${btnText}`;
     
     google.script.run
       .withSuccessHandler(function(sheetNames) {
@@ -255,6 +257,10 @@
         if (loadingNotification) {
           loadingNotification.remove();
         }
+        
+        // Restore button state
+        loadSheetsBtn.innerHTML = btnText;
+        loadSheetsBtn.disabled = false;
         
         // Handle the result
         handleSheetNames(sheetNames);
@@ -264,6 +270,10 @@
         if (loadingNotification) {
           loadingNotification.remove();
         }
+        
+        // Restore button state
+        loadSheetsBtn.innerHTML = btnText;
+        loadSheetsBtn.disabled = false;
         
         // Show error
         showNotification('Error loading sheets: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
@@ -293,23 +303,49 @@
     // Show the sheet select group
     toggleVisibility('sheetSelectGroup', true);
     
+    // Show the Load Columns button after sheet selection
+    document.getElementById('sheetSelect').addEventListener('change', function() {
+      const selectedSheet = this.value;
+      if (selectedSheet) {
+        // Store the selected sheet name
+        spreadsheetData.sheetName = selectedSheet;
+        
+        // Update summary
+        document.getElementById('summarySheet').textContent = selectedSheet;
+        
+        // Show the Load Columns button
+        toggleVisibility('loadColumnsGroup', true);
+      } else {
+        toggleVisibility('loadColumnsGroup', false);
+      }
+    });
+    
     // Show success notification
     showNotification('Sheets loaded successfully', 'success', config.toastDuration);
   }
 
-  // Function to load sheet columns with integrated recipient count
+  // Function to load sheet columns - now called manually via button click
   function loadSheetColumns() {
     const sheetName = document.getElementById('sheetSelect').value;
-    if (!sheetName) return;
+    if (!sheetName) {
+      showNotification('Please select a sheet first', 'error', config.toastDuration);
+      return;
+    }
     
-    // Store the selected sheet name
-    spreadsheetData.sheetName = sheetName;
-    
-    // Update summary
-    document.getElementById('summarySheet').textContent = sheetName;
+    // Show loading state on button
+    const loadColumnsBtn = document.getElementById('loadColumnsBtn');
+    loadColumnsBtn.disabled = true;
+    const btnText = loadColumnsBtn.textContent || loadColumnsBtn.innerText;
+    loadColumnsBtn.innerHTML = `<span class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span> ${btnText}`;
     
     // Show loading notification
     const loadingNotification = showNotification('Loading columns...', 'info', 0);
+    
+    // Reset visibility state of dropdown containers
+    toggleVisibility('emailColumnGroup', false);
+    toggleVisibility('ccColumnGroup', false);
+    toggleVisibility('bccColumnGroup', false);
+    toggleVisibility('ccBccToggleGroup', false);
     
     // Call the server function
     google.script.run
@@ -319,25 +355,39 @@
           loadingNotification.remove();
         }
         
+        // Restore button state
+        loadColumnsBtn.innerHTML = btnText;
+        loadColumnsBtn.disabled = false;
+        
         // Show success notification
         showNotification('Columns loaded successfully', 'success', config.toastDuration);
         
         // Handle the result
         handleSheetColumns(result.headers);
         
-        // Show CC/BCC toggle option once we have columns
+        // Ensure these are explicitly shown
+        toggleVisibility('emailColumnGroup', true);
         toggleVisibility('ccBccToggleGroup', true);
         
         // Store recipient count if available (will be 0 initially)
         spreadsheetData.recipientCount = result.recipientCount || 0;
         document.getElementById('summaryRecipientCount').textContent = 
           result.recipientCount ? result.recipientCount : '-';
+          
+        // Add recipient count toast notification
+        if (result.recipientCount > 0) {
+          showNotification(`Found ${result.recipientCount} potential recipients`, 'success', config.toastDuration);
+        }
       })
       .withFailureHandler(function(error) {
         // Remove loading notification
         if (loadingNotification) {
           loadingNotification.remove();
         }
+        
+        // Restore button state
+        loadColumnsBtn.innerHTML = btnText;
+        loadColumnsBtn.disabled = false;
         
         // Show error
         showNotification('Error loading columns: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
@@ -473,7 +523,7 @@
     showNotification('Copied: ' + text, 'success', config.toastDuration);
   }
 
-  // Function to send test email with timeout
+  // Function to send test email with improved debugging and timeout handling
   function sendTestEmail() {
     const testEmail = document.getElementById('testEmailAddress').value.trim();
     if (!testEmail) {
@@ -510,6 +560,12 @@
     const cc = document.getElementById('ccField') ? document.getElementById('ccField').value : '';
     const bcc = document.getElementById('bccField') ? document.getElementById('bccField').value : '';
     
+    // Add debugging
+    console.log('Sending test email to:', testEmail);
+    console.log('Subject:', subjectLine);
+    console.log('From:', fromEmail);
+    console.log('Display name:', fromName);
+    
     // Set timeout to prevent infinite waiting
     const timeoutDuration = 30000; // 30 seconds
     let isComplete = false;
@@ -533,6 +589,9 @@
         isComplete = true;
         clearTimeout(timeoutId);
         
+        // Add detailed logging
+        console.log('Test email result:', result);
+        
         // Restore button state
         sendPreviewBtn.innerHTML = btnText;
         sendPreviewBtn.disabled = false;
@@ -552,6 +611,9 @@
         isComplete = true;
         clearTimeout(timeoutId);
         
+        // Add detailed logging
+        console.error('Test email error:', error);
+        
         // Restore button state
         sendPreviewBtn.innerHTML = btnText;
         sendPreviewBtn.disabled = false;
@@ -564,7 +626,12 @@
         // Show error
         showNotification('Error sending test email: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
       })
-      .sendTestEmail(testEmail, subjectLine, fromEmail, fromName, cc, bcc);
+      // IMPORTANT: Use the correct server function name
+      .sendTestEmailWithData(testEmail, subjectLine, fromEmail, fromName, cc, bcc, {
+        replacePlaceholders: true,
+        spreadsheetId: spreadsheetData.id, 
+        sheetName: spreadsheetData.sheetName
+      });
   }
 
   // Function to execute mail merge - now called directly
@@ -831,16 +898,22 @@
         
         // Update UI
         document.getElementById('summaryRecipientCount').textContent = count;
+        
+        // Add toast notification for recipient count
+        showNotification(`Found ${count} potential recipients in the "${emailColumn}" column`, 'info', config.toastDuration);
       })
       .withFailureHandler(function(error) {
         // Show error
         document.getElementById('summaryRecipientCount').textContent = 'Error';
         console.error('Error counting recipients:', error);
+        
+        // Show error notification
+        showNotification('Error determining recipient count', 'error', config.toastDuration);
       })
       .getRecipientCount(spreadsheetData.id, spreadsheetData.sheetName, emailColumn);
   }
 
-  // Modified function to update summary with proper handling of recipient count
+  // Modified function to update summary with subject line
   function updateSummary() {
     // Get current values
     const emailColumn = document.getElementById('emailColumnSelect').value;
@@ -848,6 +921,7 @@
     const bccColumn = document.getElementById('bccColumnSelect').value;
     const fromEmail = document.getElementById('fromEmailSelect').value;
     const fromName = document.getElementById('fromName').value;
+    const subjectLine = document.getElementById('subjectLine').value;
     
     // Update summary display
     document.getElementById('summarySheet').textContent = spreadsheetData.sheetName || '-';
@@ -856,6 +930,7 @@
     document.getElementById('summaryBccColumn').textContent = bccColumn || '-';
     document.getElementById('summaryFromName').textContent = fromName || '-';
     document.getElementById('summaryFromEmail').textContent = fromEmail || '-';
+    document.getElementById('summarySubject').textContent = subjectLine || '-';
     
     // Update recipient count if email column changed
     if (emailColumn && spreadsheetData.sheetName && spreadsheetData.id) {
@@ -870,37 +945,40 @@
 
   // Initialize when page loads
   document.addEventListener('DOMContentLoaded', function() {
-  try {
-    console.log('DOM Content Loaded - Initializing UI');
-    
-    // Load sender emails
-    loadSenderEmails();
-    
-    // Set up event listeners
-    document.getElementById('subjectLine').addEventListener('input', updateCharCounter);
-    document.getElementById('fromEmailSelect').addEventListener('change', updateSummary);
-    document.getElementById('fromName').addEventListener('input', updateSummary);
-    document.getElementById('emailColumnSelect').addEventListener('change', updateSummary);
-    
-    // Initialize character counter
-    updateCharCounter();
-    
-    // Set initial tooltip state
-    toggleTooltips(config.showTooltips);
-    
-    // Add keyboard accessibility for placeholder items
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        if (e.target.hasAttribute('role') && e.target.getAttribute('role') === 'button') {
-          e.preventDefault();
-          e.target.click();
+    try {
+      console.log('DOM Content Loaded - Initializing UI');
+      
+      // Load sender emails
+      loadSenderEmails();
+      
+      // Set up event listeners
+      document.getElementById('subjectLine').addEventListener('input', function() {
+        updateCharCounter();
+        updateSummary(); // Update summary when subject changes
+      });
+      document.getElementById('fromEmailSelect').addEventListener('change', updateSummary);
+      document.getElementById('fromName').addEventListener('input', updateSummary);
+      document.getElementById('emailColumnSelect').addEventListener('change', updateSummary);
+      
+      // Initialize character counter
+      updateCharCounter();
+      
+      // Set initial tooltip state
+      toggleTooltips(config.showTooltips);
+      
+      // Add keyboard accessibility for placeholder items
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target.hasAttribute('role') && e.target.getAttribute('role') === 'button') {
+            e.preventDefault();
+            e.target.click();
+          }
         }
-      }
-    });
-    
-    console.log('UI initialization completed');
-  } catch (error) {
-    console.error('Error during initialization:', error);
-  }
-});
+      });
+      
+      console.log('UI initialization completed');
+    } catch (error) {
+      console.error('Error during initialization:', error);
+    }
+  });
 </script>
