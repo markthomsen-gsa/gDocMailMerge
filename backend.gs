@@ -4,6 +4,8 @@
  * with advanced features for email account selection, content validation, and more.
  */
 
+"use strict";
+
 // Create a menu when the document is opened
 function onOpen() {
   DocumentApp.getUi()
@@ -34,39 +36,11 @@ function include(filename) {
 
 /**
  * Gets the content of the current document.
+ * Consolidated function for document text retrieval.
  * @return {string} The document content as raw text.
  */
 function getDocContent() {
-  const doc = DocumentApp.getActiveDocument();
-  const body = doc.getBody();
-  
-  // Just return the raw text with no modifications
-  return body.getText();
-}
-
-/**
- * Gets the raw text content of the current document.
- * @return {string} The document content as plain text.
- */
-function getDocPlainText() {
-  const doc = DocumentApp.getActiveDocument();
-  const body = doc.getBody();
-  return body.getText();
-}
-
-/**
- * Gets the subject line from the document (assumes first line is subject).
- * @return {string} The subject line.
- */
-function getSubjectLine() {
-  const doc = DocumentApp.getActiveDocument();
-  const paragraphs = doc.getBody().getParagraphs();
-  
-  if (paragraphs.length > 0) {
-    return paragraphs[0].getText();
-  }
-  
-  return "No subject";
+  return DocumentApp.getActiveDocument().getBody().getText();
 }
 
 /**
@@ -74,10 +48,7 @@ function getSubjectLine() {
  * @return {Object[]} Array of email addresses and display names.
  */
 function getAvailableFromAddresses() {
-  // Get the user's primary email address
   const primaryEmail = Session.getActiveUser().getEmail();
-  
-  // Create a result array with primary email
   const results = [
     {
       email: primaryEmail,
@@ -85,13 +56,9 @@ function getAvailableFromAddresses() {
       isPrimary: true
     }
   ];
-  
-  // Try to get delegated addresses using Gmail API (if available and authorized)
   try {
-    // This is a simplified example. In a production app, you'd need proper Gmail API auth
     const delegatedAddresses = getDelegatedAddresses();
     if (delegatedAddresses && delegatedAddresses.length > 0) {
-      // Add each delegated address to the results
       delegatedAddresses.forEach(addr => {
         results.push({
           email: addr.email,
@@ -101,10 +68,8 @@ function getAvailableFromAddresses() {
       });
     }
   } catch (e) {
-    // Skip delegated addresses if there's an error or no access
-    Logger.log('Couldn\'t retrieve delegated addresses: ' + e.message);
+    Logger.log("Couldn't retrieve delegated addresses: " + e.message);
   }
-  
   return results;
 }
 
@@ -115,26 +80,7 @@ function getAvailableFromAddresses() {
  * @return {Object[]} Array of delegated email addresses.
  */
 function getDelegatedAddresses() {
-  // This would use Gmail API in a real implementation
-  // Since we don't have full Gmail API access here, this returns dummy data
-  
-  // In a real implementation, you'd use Gmail API's users.settings.sendAs.list method
-  // See: https://developers.google.com/gmail/api/reference/rest/v1/users.settings.sendAs/list
-  
   return [];
-  
-  /* Example of real implementation with Gmail API:
-  
-  const gmailService = Gmail.Users.Settings.SendAs.list('me');
-  const sendAsAddresses = gmailService.sendAs || [];
-  
-  return sendAsAddresses
-    .filter(addr => !addr.isPrimary)
-    .map(addr => ({
-      email: addr.sendAsEmail,
-      name: addr.displayName
-    }));
-  */
 }
 
 /**
@@ -142,11 +88,7 @@ function getDelegatedAddresses() {
  * @return {string} The user's name or email if name is not available.
  */
 function getUserName() {
-  // This is a simplified example
-  // In a production app with proper OAuth scope, you'd get the user's profile info
   const email = Session.getActiveUser().getEmail();
-  
-  // Extract a name from the email address if actual name not available
   const namePart = email.split('@')[0];
   return formatNameFromEmail(namePart);
 }
@@ -154,10 +96,9 @@ function getUserName() {
 /**
  * Formats a name from an email address part.
  * @param {string} namePart - The part of the email before @
- * @return {string} Formatted name
+ * @return {string} Formatted name.
  */
 function formatNameFromEmail(namePart) {
-  // Convert something like "john.doe" to "John Doe"
   return namePart
     .split(/[._-]/)
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
@@ -190,23 +131,16 @@ function getColumnsAndRecipientCount(spreadsheetId, sheetName, emailColumn) {
   try {
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheet = spreadsheet.getSheetByName(sheetName);
-    
     if (!sheet) {
       throw new Error("Sheet not found: " + sheetName);
     }
-    
     const range = sheet.getDataRange();
     const values = range.getValues();
-    
-    // Get headers from first row
     const headers = values[0].filter(header => header !== "");
-    
-    // Calculate recipient count if email column is specified
     let recipientCount = 0;
     if (emailColumn && values.length > 1) {
       const emailColIndex = headers.indexOf(emailColumn);
       if (emailColIndex !== -1) {
-        // Count non-empty cells in the email column (excluding header row)
         for (let i = 1; i < values.length; i++) {
           if (values[i][emailColIndex] && String(values[i][emailColIndex]).trim() !== '') {
             recipientCount++;
@@ -214,7 +148,6 @@ function getColumnsAndRecipientCount(spreadsheetId, sheetName, emailColumn) {
         }
       }
     }
-    
     return {
       headers: headers,
       recipientCount: recipientCount
@@ -237,11 +170,9 @@ function getColumnHeaders(spreadsheetId, sheetName) {
   try {
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheet = spreadsheet.getSheetByName(sheetName);
-    
     if (!sheet) {
       throw new Error("Sheet not found: " + sheetName);
     }
-    
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     return headers.filter(header => header !== "");
   } catch (e) {
@@ -260,30 +191,21 @@ function getRecipientCount(spreadsheetId, sheetName, emailColumn) {
   try {
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheet = spreadsheet.getSheetByName(sheetName);
-    
     if (!sheet) {
       throw new Error("Sheet not found: " + sheetName);
     }
-    
-    // Get all data
     const data = sheet.getDataRange().getValues();
-    
-    // Find email column index
     const headers = data[0];
     const emailColIndex = headers.indexOf(emailColumn);
-    
     if (emailColIndex === -1) {
       throw new Error("Email column not found: " + emailColumn);
     }
-    
-    // Count non-empty cells in the email column (excluding header row)
     let count = 0;
     for (let i = 1; i < data.length; i++) {
       if (data[i][emailColIndex] && String(data[i][emailColIndex]).trim() !== '') {
         count++;
       }
     }
-    
     return count;
   } catch (e) {
     Logger.log("Error getting recipient count: " + e.message);
@@ -297,18 +219,13 @@ function getRecipientCount(spreadsheetId, sheetName, emailColumn) {
  * @return {string} The extracted spreadsheet ID.
  */
 function extractSpreadsheetId(spreadsheetUrl) {
-  // Check if it's already an ID (simple alphanumeric string)
   if (/^[a-zA-Z0-9_-]{40,}$/.test(spreadsheetUrl)) {
     return spreadsheetUrl;
   }
-  
-  // Extract ID from URL
   const matches = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (matches && matches[1]) {
     return matches[1];
   }
-  
-  // Return original if no match (might be a direct ID)
   return spreadsheetUrl;
 }
 
@@ -322,19 +239,13 @@ function getSpreadsheetData(spreadsheetId, sheetName) {
   try {
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheet = spreadsheet.getSheetByName(sheetName);
-    
     if (!sheet) {
       throw new Error("Sheet not found: " + sheetName);
     }
-    
     const range = sheet.getDataRange();
-    
-    // Use getDisplayValues() to preserve date formatting
     const displayValues = range.getDisplayValues();
-    
     const headers = displayValues[0];
     const rows = displayValues.slice(1);
-    
     return {
       headers: headers,
       rows: rows
@@ -348,94 +259,25 @@ function getSpreadsheetData(spreadsheetId, sheetName) {
  * Gets a specific row from a spreadsheet.
  * @param {string} spreadsheetId - The ID of the spreadsheet.
  * @param {string} sheetName - The name of the sheet.
- * @param {number} rowIndex - The 0-based row index (0 would return the first data row, not headers).
+ * @param {number} rowIndex - The 0-based row index (0 returns the first data row).
  * @return {Object} An object mapping column names to values.
  */
 function getSpreadsheetRow(spreadsheetId, sheetName, rowIndex) {
   try {
     const data = getSpreadsheetData(spreadsheetId, sheetName);
-    
     if (rowIndex >= data.rows.length) {
       throw new Error(`Row index ${rowIndex} is out of bounds. Max index is ${data.rows.length - 1}`);
     }
-    
     const row = data.rows[rowIndex];
     const result = {};
-    
     for (let i = 0; i < data.headers.length; i++) {
       if (data.headers[i]) {
         result[data.headers[i]] = row[i];
       }
     }
-    
     return result;
   } catch (e) {
     throw new Error("Error getting spreadsheet row: " + e.message);
-  }
-}
-
-/**
- * Generates a preview document with merged data.
- * @param {string} spreadsheetId - The ID of the spreadsheet.
- * @param {string} sheetName - The name of the sheet.
- * @param {number} rowIndex - The row index to use for the preview.
- * @return {Object} Status object with success flag, message, and doc URL.
- */
-function generatePreviewDoc(spreadsheetId, sheetName, rowIndex) {
-  try {
-    // If called from menu without params, show UI to select params
-    if (!spreadsheetId || !sheetName) {
-      const ui = DocumentApp.getUi();
-      const response = ui.alert(
-        'Generate Preview Document',
-        'This will create a new document with merged data.\n\n' +
-        'Please open the Mail Merge sidebar to configure and use this feature.',
-        ui.ButtonSet.OK
-      );
-      return {
-        success: false,
-        message: "Please use the Mail Merge sidebar to configure and preview"
-      };
-    }
-    
-    // Get source document
-    const sourceDoc = DocumentApp.getActiveDocument();
-    const sourceDocText = sourceDoc.getBody().getText();
-    
-    // Get row data
-    const rowData = getSpreadsheetRow(spreadsheetId, sheetName, rowIndex);
-    
-    // Create new document
-    const newDoc = DocumentApp.create(`${sourceDoc.getName()} - Preview`);
-    const body = newDoc.getBody();
-    
-    // Replace placeholders in content
-    let mergedContent = sourceDocText;
-    
-    for (const [key, value] of Object.entries(rowData)) {
-      const placeholder = `{{${key}}}`;
-      const valueStr = value !== undefined && value !== null ? value.toString() : '';
-      
-      // Global replace all occurrences
-      mergedContent = mergedContent.split(placeholder).join(valueStr);
-    }
-    
-    // Set content to new document
-    body.setText(mergedContent);
-    
-    // Save the document
-    newDoc.saveAndClose();
-    
-    return {
-      success: true,
-      message: "Preview document created successfully",
-      docUrl: newDoc.getUrl()
-    };
-  } catch (e) {
-    return {
-      success: false,
-      message: "Error generating preview document: " + e.message
-    };
   }
 }
 
@@ -447,30 +289,18 @@ function generatePreviewDoc(spreadsheetId, sheetName, rowIndex) {
  */
 function validatePlaceholders(spreadsheetId, sheetName) {
   try {
-    // Get document content
-    const docText = getDocPlainText();
-    
-    // Extract placeholders from document using regex
+    const docText = getDocContent();
     const placeholderRegex = /\{\{([^{}]+)\}\}/g;
     const docPlaceholders = [];
     let match;
-    
     while ((match = placeholderRegex.exec(docText)) !== null) {
       docPlaceholders.push(match[1].trim());
     }
-    
-    // Get unique placeholders
     const uniqueDocPlaceholders = [...new Set(docPlaceholders)];
-    
-    // Get spreadsheet headers
     const headers = getColumnHeaders(spreadsheetId, sheetName);
-    
-    // Create validation results
     const matched = [];
     const unmatched = [];
     const unused = [];
-    
-    // Find matched and unmatched placeholders
     uniqueDocPlaceholders.forEach(placeholder => {
       if (headers.includes(placeholder)) {
         matched.push(placeholder);
@@ -478,22 +308,17 @@ function validatePlaceholders(spreadsheetId, sheetName) {
         unmatched.push(placeholder);
       }
     });
-    
-    // Find unused headers
     headers.forEach(header => {
       if (!uniqueDocPlaceholders.includes(header)) {
         unused.push(header);
       }
     });
-    
-    // Get an example row for the matched placeholders
     const exampleValues = {};
     if (matched.length > 0) {
       try {
         const data = getSpreadsheetData(spreadsheetId, sheetName);
         if (data.rows.length > 0) {
           const firstRow = data.rows[0];
-          
           matched.forEach(placeholder => {
             const index = data.headers.indexOf(placeholder);
             if (index !== -1) {
@@ -502,11 +327,9 @@ function validatePlaceholders(spreadsheetId, sheetName) {
           });
         }
       } catch (e) {
-        // If we can't get example values, just continue without them
-        Logger.log('Error getting example values: ' + e.message);
+        Logger.log("Error getting example values: " + e.message);
       }
     }
-    
     return {
       success: true,
       matched: matched,
@@ -531,15 +354,11 @@ function validatePlaceholders(spreadsheetId, sheetName) {
  */
 function replacePlaceholders(text, headers, row) {
   let result = text;
-  
   for (let i = 0; i < headers.length; i++) {
     const placeholder = '{{' + headers[i] + '}}';
     const value = row[i] !== undefined && row[i] !== null ? row[i].toString() : '';
-    
-    // Global replace all occurrences of the placeholder
     result = result.split(placeholder).join(value);
   }
-  
   return result;
 }
 
@@ -551,25 +370,16 @@ function replacePlaceholders(text, headers, row) {
  * @return {Object} Email options object.
  */
 function prepareEmailOptions(fromEmail, fromName, options = {}) {
-  // Create base email options
-  const emailOptions = {
-    name: fromName || undefined
-  };
-  
-  // Add cc and bcc if provided
+  const emailOptions = { name: fromName || undefined };
   if (options.cc) {
     emailOptions.cc = options.cc;
   }
-  
   if (options.bcc) {
     emailOptions.bcc = options.bcc;
   }
-  
-  // Set from address if different from the user's address
   if (fromEmail && fromEmail !== Session.getActiveUser().getEmail()) {
     emailOptions.from = fromEmail;
   }
-  
   return emailOptions;
 }
 
@@ -582,13 +392,7 @@ function prepareEmailOptions(fromEmail, fromName, options = {}) {
  */
 function logMailMergeAction(logSheet, email, status, message) {
   if (!logSheet) return;
-  
-  logSheet.appendRow([
-    new Date(),
-    email,
-    status,
-    message
-  ]);
+  logSheet.appendRow([ new Date(), email, status, message ]);
 }
 
 /**
@@ -599,61 +403,33 @@ function createOrGetLogSheet() {
   const ss = SpreadsheetApp.create('Mail Merge Log - ' + new Date().toISOString().split('T')[0]);
   const sheet = ss.getActiveSheet();
   sheet.setName('Mail Merge Log');
-  
-  // Add header row
   sheet.appendRow(['Timestamp', 'Email', 'Status', 'Message']);
-  
-  // Format header row
   sheet.getRange(1, 1, 1, 4).setFontWeight('bold');
-  
   return sheet;
 }
 
 /**
- * Process a single row for mail merge.
+ * Processes a single row for mail merge.
  * @param {Object} params - Parameters containing all necessary data for processing a row.
  * @return {Object} Result object with success flag and error message if any.
  */
 function processMailMergeRow(params) {
-  const {
-    emailAddress,
-    subjectLine,
-    templateHtml,
-    headers,
-    row,
-    emailOptions,
-    createDrafts
-  } = params;
-  
+  const { emailAddress, subjectLine, templateHtml, headers, row, emailOptions, createDrafts } = params;
   try {
-    // Skip rows with no email
     if (!emailAddress) {
       return { success: false, message: 'No email address provided' };
     }
-    
-    // Replace placeholders in subject and body
     const personalizedSubject = replacePlaceholders(subjectLine, headers, row);
     const personalizedBody = replacePlaceholders(templateHtml, headers, row);
-    
-    // Copy options and add HTML body
     const rowEmailOptions = Object.assign({}, emailOptions, { htmlBody: personalizedBody });
-    
-    // Send email or create draft
     if (createDrafts) {
       GmailApp.createDraft(emailAddress, personalizedSubject, "", rowEmailOptions);
     } else {
       GmailApp.sendEmail(emailAddress, personalizedSubject, "", rowEmailOptions);
     }
-    
-    return { 
-      success: true, 
-      message: createDrafts ? 'Draft created' : 'Email sent' 
-    };
+    return { success: true, message: createDrafts ? 'Draft created' : 'Email sent' };
   } catch (e) {
-    return { 
-      success: false, 
-      message: e.message 
-    };
+    return { success: false, message: e.message };
   }
 }
 
@@ -670,53 +446,35 @@ function processMailMergeRow(params) {
  */
 function sendTestEmailWithData(recipients, subject, fromEmail, fromName, cc, bcc, options) {
   try {
-    // Add logging
     Logger.log('Sending test email with parameters:');
     Logger.log('Recipients: ' + recipients);
     Logger.log('Subject: ' + subject);
     Logger.log('From: ' + fromEmail);
-    
-    // Get document content as HTML
     const body = getDocContent();
     let htmlBody = body;
-    
-    // Use try/catch blocks for each operation
     try {
-      // Replace placeholders if requested and spreadsheet data is provided
       if (options && options.replacePlaceholders && options.spreadsheetId && options.sheetName) {
         Logger.log('Attempting to replace placeholders');
-        // Get first row of data for placeholders
         const data = getSpreadsheetData(options.spreadsheetId, options.sheetName);
         if (data.rows.length > 0) {
           const firstRow = data.rows[0];
-          
-          // Replace placeholders in subject and body
           subject = replacePlaceholders(subject, data.headers, firstRow);
           htmlBody = replacePlaceholders(body, data.headers, firstRow);
         }
       }
     } catch (placeholderError) {
       Logger.log('Error replacing placeholders: ' + placeholderError.message);
-      // Continue with original content
     }
-    
-    // Split comma-separated emails and trim whitespace
     const emailList = recipients.split(',').map(email => email.trim());
-    
-    // Create email options
     const emailOptions = prepareEmailOptions(fromEmail, fromName, { cc, bcc });
     emailOptions.htmlBody = htmlBody;
-    
     Logger.log('Sending email with options: ' + JSON.stringify(emailOptions));
-    
     for (const email of emailList) {
       if (email) {
         GmailApp.sendEmail(email, subject, "", emailOptions);
       }
     }
-    
     Logger.log('Test email sent successfully');
-    
     return {
       success: true,
       message: `Test email sent to: ${recipients}`
@@ -744,7 +502,6 @@ function sendTestEmailWithData(recipients, subject, fromEmail, fromName, cc, bcc
  */
 function executeMailMerge(spreadsheetId, sheetName, emailColumn, subjectLine, fromEmail, fromName, options = {}) {
   try {
-    // Set default options
     options = {
       cc: '',
       bcc: '',
@@ -752,38 +509,24 @@ function executeMailMerge(spreadsheetId, sheetName, emailColumn, subjectLine, fr
       createDrafts: false,
       ...options
     };
-    
-    // Initialize logging if enabled
     let logSheet = null;
     if (options.enableLogging) {
       logSheet = createOrGetLogSheet();
     }
-    
-    // Get document content as HTML
     const templateHtml = getDocContent();
-    
-    // Get spreadsheet data
     const data = getSpreadsheetData(spreadsheetId, sheetName);
     const headers = data.headers;
     const rows = data.rows;
-    
-    // Find email column index
     const emailIndex = headers.indexOf(emailColumn);
     if (emailIndex === -1) {
       throw new Error(`Email column "${emailColumn}" not found in spreadsheet`);
     }
-    
-    // Prepare email options
     const emailOptions = prepareEmailOptions(fromEmail, fromName, options);
-    
     let sentCount = 0;
     let errorCount = 0;
     let errorEmails = [];
-    
-    // Process each row
     for (const row of rows) {
       const emailAddress = row[emailIndex];
-      
       const result = processMailMergeRow({
         emailAddress,
         subjectLine,
@@ -793,25 +536,17 @@ function executeMailMerge(spreadsheetId, sheetName, emailColumn, subjectLine, fr
         emailOptions,
         createDrafts: options.createDrafts
       });
-      
       if (result.success) {
         sentCount++;
-        
-        // Log success
         logMailMergeAction(logSheet, emailAddress, 'Success', result.message);
       } else {
         errorCount++;
         errorEmails.push(emailAddress);
-        
-        // Log error
         logMailMergeAction(logSheet, emailAddress, 'Error', result.message);
         Logger.log(`Error sending to ${emailAddress}: ${result.message}`);
       }
-      
-      // Add a small delay to avoid rate limits
       Utilities.sleep(100);
     }
-    
     return {
       success: true,
       message: options.createDrafts 
@@ -840,21 +575,13 @@ function executeMailMerge(spreadsheetId, sheetName, emailColumn, subjectLine, fr
  */
 function generateEmailPreview(spreadsheetId, sheetName, rowIndex) {
   try {
-    // Get document content as HTML
     const templateHtml = getDocContent();
-    
-    // Get row data
     const data = getSpreadsheetData(spreadsheetId, sheetName);
-    
     if (rowIndex >= data.rows.length) {
       throw new Error(`Row index ${rowIndex} is out of bounds. Max index is ${data.rows.length - 1}`);
     }
-    
     const row = data.rows[rowIndex];
-    
-    // Generate personalized content
     const personalizedBody = replacePlaceholders(templateHtml, data.headers, row);
-    
     return {
       success: true,
       message: "Preview generated successfully",
@@ -877,7 +604,6 @@ function validateSpreadsheet(spreadsheetUrl) {
   try {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-    
     return {
       success: true,
       id: spreadsheetId,
