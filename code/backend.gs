@@ -53,8 +53,7 @@ function getAvailableFromAddresses() {
     {
       email: primaryEmail,
       name: getUserName(),
-      isPrimary: true,
-      verified: true
+      isPrimary: true
     }
   ];
   try {
@@ -64,8 +63,7 @@ function getAvailableFromAddresses() {
         results.push({
           email: addr.email,
           name: addr.name || '',
-          isPrimary: false,
-          verified: addr.verified || false
+          isPrimary: false
         });
       });
     }
@@ -77,42 +75,12 @@ function getAvailableFromAddresses() {
 
 /**
  * Gets delegated email addresses from Gmail settings.
- * This implementation uses the Gmail API to retrieve accounts that the user
- * has been delegated access to send mail as.
+ * Note: This is a placeholder function. Actual implementation would require OAuth
+ * and Gmail API access.
  * @return {Object[]} Array of delegated email addresses.
  */
 function getDelegatedAddresses() {
-  const delegatedAddresses = [];
-  
-  try {
-    // Use Gmail API to get send-as aliases
-    const sendAsResponse = Gmail.Users.Settings.SendAs.list('me');
-    
-    if (sendAsResponse && sendAsResponse.sendAs) {
-      // Filter for delegated addresses (not the primary)
-      sendAsResponse.sendAs.forEach(function(sendAsAlias) {
-        // Skip the user's primary address
-        if (!sendAsAlias.isPrimary) {
-          delegatedAddresses.push({
-            email: sendAsAlias.sendAsEmail,
-            name: sendAsAlias.displayName || '',
-            isPrimary: false,
-            // Include verification status
-            verified: sendAsAlias.isVerified || false
-          });
-        }
-      });
-    }
-    
-    // Log the found delegated addresses
-    Logger.log(`Found ${delegatedAddresses.length} delegated email addresses`);
-    
-  } catch (error) {
-    Logger.log("Error fetching delegated addresses: " + error.message);
-    // Return empty array on error
-  }
-  
-  return delegatedAddresses;
+  return [];
 }
 
 /**
@@ -242,6 +210,51 @@ function getRecipientCount(spreadsheetId, sheetName, emailColumn) {
   } catch (e) {
     Logger.log("Error getting recipient count: " + e.message);
     return 0;
+  }
+}
+
+/**
+ * Gets the current email quota information.
+ * @return {Object} An object with quota details.
+ */
+function getEmailQuotaInfo() {
+  try {
+    // Get remaining quota from MailApp
+    const remaining = MailApp.getRemainingDailyQuota();
+    
+    // Log for debugging
+    Logger.log("Remaining email quota: " + remaining);
+    
+    // Determine account type for quota limit
+    let total = 100; // Default for consumer Gmail
+    const email = Session.getActiveUser().getEmail();
+    
+    // Check account type
+    if (email && !email.endsWith('@gmail.com')) {
+      total = 1500; // Typical Google Workspace limit
+    }
+    
+    // Calculate used quota
+    const used = total - remaining;
+    
+    return {
+      remaining: remaining,
+      total: total,
+      used: used,
+      hasPermission: true
+    };
+  } catch (e) {
+    Logger.log("Error getting quota info: " + e.message);
+    
+    // Check if this is a permissions error
+    const isPermissionError = e.message.includes("permissions are not sufficient");
+    
+    // Return error state
+    return {
+      hasPermission: false,
+      error: e.message,
+      isPermissionError: isPermissionError
+    };
   }
 }
 
@@ -411,7 +424,6 @@ function prepareEmailOptions(fromEmail, fromName, options = {}) {
   }
   if (fromEmail && fromEmail !== Session.getActiveUser().getEmail()) {
     emailOptions.from = fromEmail;
-    Logger.log(`Using delegated sender: ${fromEmail} (${fromName || 'No name'})`);
   }
   return emailOptions;
 }
@@ -483,9 +495,6 @@ function sendTestEmailWithData(recipients, subject, fromEmail, fromName, cc, bcc
     Logger.log('Recipients: ' + recipients);
     Logger.log('Subject: ' + subject);
     Logger.log('From: ' + fromEmail);
-    Logger.log('From Name: ' + fromName);
-    Logger.log('Using delegation: ' + (fromEmail !== Session.getActiveUser().getEmail()));
-    
     const body = getDocContent();
     let htmlBody = body;
     try {
@@ -558,10 +567,30 @@ function executeMailMerge(spreadsheetId, sheetName, emailColumn, subjectLine, fr
       throw new Error(`Email column "${emailColumn}" not found in spreadsheet`);
     }
     const emailOptions = prepareEmailOptions(fromEmail, fromName, options);
+    
+    // Try to check quota, but proceed even if there's an error
+    let quotaLimited = false;
+    let rowsToProcess = rows;
+    
+    try {
+      const remaining = MailApp.getRemainingDailyQuota();
+      
+      // If we have more recipients than quota, limit to available quota
+      if (remaining < rows.length) {
+        rowsToProcess = rows.slice(0, remaining);
+        quotaLimited = true;
+        Logger.log(`Limited mail merge to ${remaining} recipients due to quota restrictions`);
+      }
+    } catch (quotaError) {
+      // If we can't check quota, log the issue but proceed with all rows
+      Logger.log(`Could not check quota: ${quotaError.message}. Proceeding with full recipient list.`);
+    }
+    
     let sentCount = 0;
     let errorCount = 0;
     let errorEmails = [];
-    for (const row of rows) {
+    
+    for (const row of rowsToProcess) {
       const emailAddress = row[emailIndex];
       const result = processMailMergeRow({
         emailAddress,
@@ -583,14 +612,22 @@ function executeMailMerge(spreadsheetId, sheetName, emailColumn, subjectLine, fr
       }
       Utilities.sleep(100);
     }
+    
+    // Create appropriate message based on quota limitation
+    let quotaMessage = "";
+    if (quotaLimited) {
+      quotaMessage = ` (Limited by quota: ${rowsToProcess.length}/${rows.length})`;
+    }
+    
     return {
       success: true,
       message: options.createDrafts 
-        ? `Mail merge complete. Drafts created: ${sentCount}, Errors: ${errorCount}`
-        : `Mail merge complete. Sent: ${sentCount}, Errors: ${errorCount}`,
+        ? `Mail merge complete. Drafts created: ${sentCount}, Errors: ${errorCount}${quotaMessage}`
+        : `Mail merge complete. Sent: ${sentCount}, Errors: ${errorCount}${quotaMessage}`,
       sent: sentCount,
       errors: errorCount,
-      errorEmails: errorEmails.join(", ")
+      errorEmails: errorEmails.join(", "),
+      quotaLimited: quotaLimited
     };
   } catch (e) {
     return {

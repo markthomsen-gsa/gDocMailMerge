@@ -745,6 +745,83 @@
             
             <div class="grid-label">Recipient Count:</div>
             <div class="grid-value" id="summaryRecipientCount">-</div>
+            
+            <div class="grid-label">Quota Status:</div>
+            <div class="grid-value">
+              <span id="quotaStatusIndicator" 
+                    style="cursor: pointer; display: flex; align-items: center; justify-content: flex-end;" 
+                    onclick="toggleQuotaPanel()">
+                <span id="quotaStatusText">Loading...</span>
+                <span id="quotaExpandIcon" style="margin-left: 4px;">▼</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Quota Detail Panel (initially hidden) -->
+      <div id="quotaDetailPanel" class="hidden" style="border: 1px solid #dadce0; border-radius: 4px; background-color: #f8f9fa; padding: 12px; margin: 8px 0 12px; font-size: 11px;">
+        <h4 style="font-weight: 500; margin-bottom: 8px;">Email Quota Details</h4>
+        
+        <!-- Permission Error Notice -->
+        <div id="quotaPermissionError" class="hidden alert alert-warning" style="margin-bottom: 12px; padding: 6px 8px; font-size: 10px;">
+          <div class="alert-icon">⚠</div>
+          <div>
+            <strong>Permission Error:</strong> This app doesn't have permission to check your email quota.
+            <div style="margin-top: 4px;">
+              <strong>Warning:</strong> Without quota information, you might exceed your daily limit and fail to send all emails.
+            </div>
+          </div>
+        </div>
+        
+        <div id="quotaDetailedInfo">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+            <div>
+              <div style="color: #5f6368; margin-bottom: 4px;">Daily Limit:</div>
+              <div id="quotaTotalLimit" style="font-weight: 500; font-size: 12px;">-- emails</div>
+            </div>
+            <div>
+              <div style="color: #5f6368; margin-bottom: 4px;">Currently Available:</div>
+              <div id="quotaAvailable" style="font-weight: 500; font-size: 12px;">-- emails</div>
+            </div>
+            <div>
+              <div style="color: #5f6368; margin-bottom: 4px;">This Mail Merge:</div>
+              <div id="quotaMergeCount" style="font-weight: 500; font-size: 12px;">-- emails</div>
+            </div>
+            <div>
+              <div style="color: #5f6368; margin-bottom: 4px;">Remaining After:</div>
+              <div id="quotaAfterMerge" style="font-weight: 500; font-size: 12px;">-- emails</div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>Current Usage</span>
+              <span id="quotaCurrentPercentage">--%</span>
+            </div>
+            <div style="background-color: #f1f3f4; height: 4px; border-radius: 2px; overflow: hidden;">
+              <div id="quotaCurrentBar" style="background-color: #4285f4; height: 100%; width: 0%; transition: width 0.5s;"></div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>After This Mail Merge</span>
+              <span id="quotaProjectedPercentage">--%</span>
+            </div>
+            <div style="background-color: #f1f3f4; height: 4px; border-radius: 2px; overflow: hidden; position: relative;">
+              <div id="quotaCurrentBar2" style="position: absolute; background-color: #4285f4; height: 100%; width: 0%; transition: width 0.5s;"></div>
+              <div id="quotaProjectedBar" style="position: absolute; background-color: #fbbc04; height: 100%; width: 0%; transition: width 0.5s, margin-left 0.5s;"></div>
+            </div>
+          </div>
+          
+          <div id="quotaWarning" class="hidden" style="background-color: #fce8e6; border: 1px solid #ea4335; border-radius: 4px; padding: 8px; color: #b31412;">
+            <strong>Warning:</strong> <span id="quotaWarningText">This mail merge will exceed your daily quota.</span>
+            <ul style="list-style-type: disc; margin-top: 4px; margin-left: 16px;">
+              <li>Send to fewer recipients</li>
+              <li>Split into multiple batches</li>
+              <li>Wait until tomorrow's quota refreshes</li>
+            </ul>
           </div>
         </div>
       </div>

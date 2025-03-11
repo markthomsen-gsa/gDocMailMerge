@@ -12,6 +12,14 @@
     recipientCount: 0
   };
   
+  // Global variable to store quota information (with safe defaults)
+  let quotaInfo = {
+    remaining: 0,
+    total: 100,
+    used: 0,
+    hasPermission: true
+  };
+  
   // Configuration
   const config = {
     subjectCharLimit: 60,
@@ -86,6 +94,172 @@
         icon.style.display = 'none';
       }
     });
+  }
+  
+  // Function to toggle quota panel visibility
+  function toggleQuotaPanel() {
+    const panel = document.getElementById('quotaDetailPanel');
+    if (!panel) return; // Safety check
+    
+    const isVisible = !panel.classList.contains('hidden');
+    const expandIcon = document.getElementById('quotaExpandIcon');
+    
+    if (isVisible) {
+      panel.classList.add('hidden');
+      if (expandIcon) expandIcon.textContent = '▼';
+    } else {
+      panel.classList.remove('hidden');
+      if (expandIcon) expandIcon.textContent = '▲';
+      
+      // Refresh quota info when expanding
+      loadQuotaInfo();
+    }
+  }
+
+  // Function to load quota information from the server
+  function loadQuotaInfo() {
+    // Safely check if element exists
+    const statusText = document.getElementById('quotaStatusText');
+    if (statusText) {
+      statusText.textContent = 'Loading...';
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        // Store quota info
+        quotaInfo = result || { hasPermission: false };
+        
+        // Debug info
+        console.log('Received quota info:', JSON.stringify(result));
+        
+        // Update UI with quota information
+        updateQuotaDisplay();
+      })
+      .withFailureHandler(function(error) {
+        // Handle error
+        console.error('Error loading quota info:', error);
+        if (statusText) {
+          statusText.textContent = 'Error';
+        }
+      })
+      .getEmailQuotaInfo();
+  }
+
+  // Function to update the quota display with current information
+  function updateQuotaDisplay() {
+    // Safety check for missing elements
+    const quotaStatusText = document.getElementById('quotaStatusText');
+    const quotaPermissionError = document.getElementById('quotaPermissionError');
+    const quotaDetailedInfo = document.getElementById('quotaDetailedInfo');
+    
+    // If elements are missing, don't proceed
+    if (!quotaStatusText || !quotaPermissionError || !quotaDetailedInfo) {
+      console.warn('Quota display elements missing');
+      return;
+    }
+    
+    // Check if we have permission to access quota information
+    if (!quotaInfo.hasPermission) {
+      // Show permission error
+      quotaStatusText.textContent = '⚠ Unknown';
+      quotaStatusText.style.color = '#f9ab00';
+      
+      // Show permission error notice
+      quotaPermissionError.classList.remove('hidden');
+      
+      // Hide the bars and details that we can't calculate
+      quotaDetailedInfo.classList.add('hidden');
+      
+      return;
+    }
+    
+    // Hide permission error if we have permission
+    quotaPermissionError.classList.add('hidden');
+    quotaDetailedInfo.classList.remove('hidden');
+    
+    // Get necessary data with safe defaults
+    const recipientCount = spreadsheetData.recipientCount || 0;
+    const remaining = quotaInfo.remaining || 0;
+    const total = quotaInfo.total || 100;
+    const used = quotaInfo.used || 0;
+    
+    // Debug log the values
+    console.log('Quota values:', { remaining, total, used, recipientCount });
+    
+    // Calculate percentages correctly
+    const usedPercentage = total > 0 ? Math.round((used / total) * 100) : 0;
+    const willUsePercentage = total > 0 ? Math.round((recipientCount / total) * 100) : 0;
+    const afterMergeRemaining = remaining - recipientCount;
+    const willExceedQuota = recipientCount > remaining;
+    const afterMergePercentage = Math.min(100, usedPercentage + willUsePercentage);
+    
+    // Update status text and color
+    if (willExceedQuota) {
+      quotaStatusText.textContent = '⚠ Warning';
+      quotaStatusText.style.color = '#ea4335';
+    } else {
+      quotaStatusText.textContent = '✓ OK';
+      quotaStatusText.style.color = '#34a853';
+    }
+    
+    // Safely update UI elements
+    const elements = {
+      'quotaTotalLimit': total + ' emails',
+      'quotaAvailable': remaining + ' emails',
+      'quotaMergeCount': recipientCount + ' emails',
+      'quotaCurrentPercentage': usedPercentage + '%',
+      'quotaProjectedPercentage': afterMergePercentage + '%'
+    };
+    
+    // Update text elements if they exist
+    for (const [id, value] of Object.entries(elements)) {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    }
+    
+    // Update "Remaining After" field
+    const afterMergeEl = document.getElementById('quotaAfterMerge');
+    if (afterMergeEl) {
+      if (willExceedQuota) {
+        afterMergeEl.textContent = 'Exceeds by ' + Math.abs(afterMergeRemaining);
+        afterMergeEl.style.color = '#ea4335';
+      } else {
+        afterMergeEl.textContent = afterMergeRemaining + ' emails';
+        afterMergeEl.style.color = '';
+      }
+    }
+    
+    // Update progress bars if they exist
+    const bars = {
+      'quotaCurrentBar': usedPercentage + '%',
+      'quotaCurrentBar2': usedPercentage + '%'
+    };
+    
+    for (const [id, width] of Object.entries(bars)) {
+      const element = document.getElementById(id);
+      if (element) element.style.width = width;
+    }
+    
+    // Update projected bar
+    const projectedBar = document.getElementById('quotaProjectedBar');
+    if (projectedBar) {
+      projectedBar.style.width = willUsePercentage + '%';
+      projectedBar.style.marginLeft = usedPercentage + '%';
+    }
+    
+    // Show/hide warning
+    const warningEl = document.getElementById('quotaWarning');
+    const warningText = document.getElementById('quotaWarningText');
+    
+    if (warningEl && warningText) {
+      if (willExceedQuota) {
+        warningEl.classList.remove('hidden');
+        warningText.textContent = 
+          `This mail merge will exceed your daily quota by ${recipientCount - remaining} emails.`;
+      } else {
+        warningEl.classList.add('hidden');
+      }
+    }
   }
   
   // Real-time validation for spreadsheet URL
@@ -374,6 +548,9 @@
         document.getElementById('summaryRecipientCount').textContent = 
           result.recipientCount ? result.recipientCount : '-';
           
+        // Update quota display with new recipient count
+        updateQuotaDisplay();
+          
         // Add recipient count toast notification
         if (result.recipientCount > 0) {
           showNotification(`Found ${result.recipientCount} potential recipients`, 'success', config.toastDuration);
@@ -653,6 +830,24 @@
       return;
     }
     
+    // Add quota check before sending (if we have permission)
+    if (quotaInfo.hasPermission && quotaInfo.remaining > 0 && spreadsheetData.recipientCount > quotaInfo.remaining) {
+      // Show a confirmation dialog
+      const confirmResult = confirm(
+        `Warning: This mail merge will exceed your daily quota.\n\n` +
+        `You are trying to send ${spreadsheetData.recipientCount} emails but only have ${quotaInfo.remaining} remaining.\n\n` +
+        `Would you like to send only ${quotaInfo.remaining} emails now (up to your quota limit)?`
+      );
+      
+      if (!confirmResult) {
+        // User canceled
+        return;
+      }
+      
+      // If user confirms, we proceed but add a notification
+      showNotification('Mail merge will be limited to your available quota', 'warning', config.toastDuration);
+    }
+    
     const fromEmail = document.getElementById('fromEmailSelect').value;
     const fromName = document.getElementById('fromName').value;
     
@@ -703,6 +898,9 @@
           
           // Handle the result
           handleMailMergeResults(result);
+          
+          // Refresh quota info after sending
+          loadQuotaInfo();
         })
         .withFailureHandler(function(error) {
           // Restore button state
@@ -724,6 +922,8 @@
     let progress = 0;
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
+    
+    if (!progressBar || !progressText) return;
     
     const interval = setInterval(function() {
       if (progress >= 95) {
@@ -762,6 +962,8 @@
     const resultsDetails = document.getElementById('resultsDetails');
     const errorEmails = document.getElementById('errorEmails');
     
+    if (!resultsDiv || !resultsIcon || !resultsTitle || !resultsDetails) return;
+    
     if (result.success) {
       // Set results info
       resultsDiv.className = 'alert alert-success';
@@ -769,14 +971,19 @@
       resultsTitle.textContent = 'Mail merge completed!';
       resultsDetails.textContent = `Sent: ${result.sent} | Errors: ${result.errors}`;
       
+      // Add quota limitation info if applicable
+      if (result.quotaLimited) {
+        resultsDetails.textContent += ` (Limited by quota)`;
+      }
+      
       // Show notification
       showNotification(`Mail merge complete. Sent: ${result.sent}, Errors: ${result.errors}`, 'success', config.toastDuration);
       
       // Show error emails if any
-      if (result.errors > 0 && result.errorEmails) {
+      if (errorEmails && result.errors > 0 && result.errorEmails) {
         errorEmails.textContent = `Failed emails: ${result.errorEmails}`;
         toggleVisibility('errorEmails', true);
-      } else {
+      } else if (errorEmails) {
         toggleVisibility('errorEmails', false);
       }
     } else {
@@ -784,7 +991,10 @@
       resultsIcon.textContent = '✗';
       resultsTitle.textContent = 'Mail merge failed';
       resultsDetails.textContent = result.message || 'An error occurred during mail merge';
-      toggleVisibility('errorEmails', false);
+      
+      if (errorEmails) {
+        toggleVisibility('errorEmails', false);
+      }
       
       // Show notification
       showNotification('Mail merge failed: ' + (result.message || 'Unknown error'), 'error', config.toastDuration);
@@ -811,7 +1021,10 @@
         
         // Also use the user's email for test email field
         if (emails && emails.length > 0) {
-          document.getElementById('testEmailAddress').value = emails[0].email || '';
+          const testEmailField = document.getElementById('testEmailAddress');
+          if (testEmailField) {
+            testEmailField.value = emails[0].email || '';
+          }
         }
       })
       .withFailureHandler(function(error) {
@@ -826,9 +1039,10 @@
       .getAvailableFromAddresses();
   }
 
-  // Handler for sender emails - updated to show delegation status
+  // Handler for sender emails
   function handleSenderEmails(emails) {
     const fromEmailSelect = document.getElementById('fromEmailSelect');
+    if (!fromEmailSelect) return;
     
     // Clear existing options
     fromEmailSelect.innerHTML = '';
@@ -837,22 +1051,18 @@
     emails.forEach(email => {
       const option = document.createElement('option');
       option.value = email.email;
-      
-      // Format display text based on status
-      if (email.isPrimary) {
-        option.textContent = `${email.email} (Default)`;
-      } else if (!email.verified) {
-        option.textContent = `${email.email} (Delegated - Not Verified)`;
-      } else {
-        option.textContent = `${email.email} (Delegated${email.name ? ' - ' + email.name : ''})`;
-      }
-      
+      option.textContent = email.isPrimary ? 
+        `${email.email} (Default)` : 
+        `${email.email} (${email.name || 'Delegated'})`;
       fromEmailSelect.appendChild(option);
     });
     
     // Set default sender name
     if (emails.length > 0 && emails[0].name) {
-      document.getElementById('fromName').value = emails[0].name;
+      const fromNameField = document.getElementById('fromName');
+      if (fromNameField) {
+        fromNameField.value = emails[0].name;
+      }
     } else {
       getUserName();
     }
@@ -865,7 +1075,10 @@
   function getUserName() {
     google.script.run
       .withSuccessHandler(function(name) {
-        document.getElementById('fromName').value = name;
+        const fromNameField = document.getElementById('fromName');
+        if (fromNameField) {
+          fromNameField.value = name;
+        }
         updateSummary();
       })
       .withFailureHandler(function(error) {
@@ -878,8 +1091,8 @@
   function updateSenderName() {
     // This would be more complex with delegated addresses
     // Here we'll just keep the name as is or get it again if empty
-    const currentName = document.getElementById('fromName').value;
-    if (!currentName) {
+    const fromNameField = document.getElementById('fromName');
+    if (fromNameField && !fromNameField.value) {
       getUserName();
     }
     
@@ -891,12 +1104,18 @@
   function updateRecipientCount() {
     const emailColumn = document.getElementById('emailColumnSelect').value;
     if (!emailColumn || !spreadsheetData.id || !spreadsheetData.sheetName) {
-      document.getElementById('summaryRecipientCount').textContent = '-';
+      const summaryRecipientCount = document.getElementById('summaryRecipientCount');
+      if (summaryRecipientCount) {
+        summaryRecipientCount.textContent = '-';
+      }
       return;
     }
     
     // Show loading state
-    document.getElementById('summaryRecipientCount').textContent = 'Loading...';
+    const summaryRecipientCount = document.getElementById('summaryRecipientCount');
+    if (summaryRecipientCount) {
+      summaryRecipientCount.textContent = 'Loading...';
+    }
     
     google.script.run
       .withSuccessHandler(function(count) {
@@ -904,14 +1123,21 @@
         spreadsheetData.recipientCount = count;
         
         // Update UI
-        document.getElementById('summaryRecipientCount').textContent = count;
+        if (summaryRecipientCount) {
+          summaryRecipientCount.textContent = count;
+        }
+        
+        // Update quota display with new recipient count
+        updateQuotaDisplay();
         
         // Add toast notification for recipient count
         showNotification(`Found ${count} potential recipients in the "${emailColumn}" column`, 'info', config.toastDuration);
       })
       .withFailureHandler(function(error) {
         // Show error
-        document.getElementById('summaryRecipientCount').textContent = 'Error';
+        if (summaryRecipientCount) {
+          summaryRecipientCount.textContent = 'Error';
+        }
         console.error('Error counting recipients:', error);
         
         // Show error notification
@@ -922,22 +1148,33 @@
 
   // Modified function to update summary with subject line
   function updateSummary() {
+    // Safely get current values
+    const getElementValue = function(id) {
+      const element = document.getElementById(id);
+      return element ? element.value : '';
+    };
+    
     // Get current values
-    const emailColumn = document.getElementById('emailColumnSelect').value;
-    const ccColumn = document.getElementById('ccColumnSelect').value;
-    const bccColumn = document.getElementById('bccColumnSelect').value;
-    const fromEmail = document.getElementById('fromEmailSelect').value;
-    const fromName = document.getElementById('fromName').value;
-    const subjectLine = document.getElementById('subjectLine').value;
+    const emailColumn = getElementValue('emailColumnSelect');
+    const ccColumn = getElementValue('ccColumnSelect');
+    const bccColumn = getElementValue('bccColumnSelect');
+    const fromEmail = getElementValue('fromEmailSelect');
+    const fromName = getElementValue('fromName');
+    const subjectLine = getElementValue('subjectLine');
     
     // Update summary display
-    document.getElementById('summarySheet').textContent = spreadsheetData.sheetName || '-';
-    document.getElementById('summaryEmailColumn').textContent = emailColumn || '-';
-    document.getElementById('summaryCcColumn').textContent = ccColumn || '-';
-    document.getElementById('summaryBccColumn').textContent = bccColumn || '-';
-    document.getElementById('summaryFromName').textContent = fromName || '-';
-    document.getElementById('summaryFromEmail').textContent = fromEmail || '-';
-    document.getElementById('summarySubject').textContent = subjectLine || '-';
+    const updateElementText = function(id, text) {
+      const element = document.getElementById(id);
+      if (element) element.textContent = text || '-';
+    };
+    
+    updateElementText('summarySheet', spreadsheetData.sheetName);
+    updateElementText('summaryEmailColumn', emailColumn);
+    updateElementText('summaryCcColumn', ccColumn);
+    updateElementText('summaryBccColumn', bccColumn);
+    updateElementText('summaryFromName', fromName);
+    updateElementText('summaryFromEmail', fromEmail);
+    updateElementText('summarySubject', subjectLine);
     
     // Update recipient count if email column changed
     if (emailColumn && spreadsheetData.sheetName && spreadsheetData.id) {
@@ -946,8 +1183,11 @@
         updateRecipientCount();
       }
     } else {
-      document.getElementById('summaryRecipientCount').textContent = '-';
+      updateElementText('summaryRecipientCount', '-');
     }
+    
+    // Update quota display
+    updateQuotaDisplay();
   }
 
   // Initialize when page loads
@@ -958,14 +1198,27 @@
       // Load sender emails
       loadSenderEmails();
       
+      // Load quota info when the page loads (with a small delay to ensure UI elements are ready)
+      setTimeout(loadQuotaInfo, 500);
+      
       // Set up event listeners
-      document.getElementById('subjectLine').addEventListener('input', function() {
+      const setupEventListener = function(id, event, handler) {
+        const element = document.getElementById(id);
+        if (element) {
+          element.addEventListener(event, handler);
+        } else {
+          console.warn(`Element with ID "${id}" not found for event binding`);
+        }
+      };
+      
+      setupEventListener('subjectLine', 'input', function() {
         updateCharCounter();
-        updateSummary(); // Update summary when subject changes
+        updateSummary();
       });
-      document.getElementById('fromEmailSelect').addEventListener('change', updateSummary);
-      document.getElementById('fromName').addEventListener('input', updateSummary);
-      document.getElementById('emailColumnSelect').addEventListener('change', updateSummary);
+      
+      setupEventListener('fromEmailSelect', 'change', updateSummary);
+      setupEventListener('fromName', 'input', updateSummary);
+      setupEventListener('emailColumnSelect', 'change', updateSummary);
       
       // Initialize character counter
       updateCharCounter();
@@ -986,6 +1239,7 @@
       console.log('UI initialization completed');
     } catch (error) {
       console.error('Error during initialization:', error);
+      alert('There was an error initializing the UI. Please reload the page.');
     }
   });
 </script>
