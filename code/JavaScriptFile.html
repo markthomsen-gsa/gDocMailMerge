@@ -1227,56 +1227,252 @@
     updateQuotaDisplay();
   }
 
-  // Initialize when page loads
-  document.addEventListener('DOMContentLoaded', function() {
-    try {
-      console.log('DOM Content Loaded - Initializing UI');
+  // Load configuration list into the sidebar
+function loadConfigurationList() {
+  const configSelect = document.getElementById('configSelect');
+  configSelect.innerHTML = '<option value="">Select a configuration...</option>';
+  
+  google.script.run
+    .withSuccessHandler(function(configs) {
+      window.availableConfigs = configs; // Store for later use
       
-      // Load sender emails
-      loadSenderEmails();
-      
-      // Load quota info when the page loads (with a small delay to ensure UI elements are ready)
-      setTimeout(loadQuotaInfo, 500);
-      
-      // Set up event listeners
-      const setupEventListener = function(id, event, handler) {
-        const element = document.getElementById(id);
-        if (element) {
-          element.addEventListener(event, handler);
-        } else {
-          console.warn(`Element with ID "${id}" not found for event binding`);
+      if (configs && Object.keys(configs).length > 0) {
+        for (const name in configs) {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          configSelect.appendChild(option);
         }
-      };
+        
+        showNotification('Configuration list refreshed', 'info', config.toastDuration);
+      } else {
+        showNotification('No saved configurations found', 'info', config.toastDuration);
+      }
+    })
+    .withFailureHandler(function(error) {
+      showNotification('Error loading configurations: ' + error.message, 'error', config.toastDuration);
+    })
+    .getAvailableConfigurations();
+}
+
+// Load selected configuration into the UI fields
+function loadSelectedConfig() {
+  const configName = document.getElementById('configSelect').value;
+  if (!configName) {
+    showNotification('Please select a configuration', 'error', config.toastDuration);
+    return;
+  }
+  
+  const selectedConfig = window.availableConfigs[configName];
+  if (!selectedConfig) {
+    showNotification('Configuration not found', 'error', config.toastDuration);
+    return;
+  }
+  
+  // Show loading notification
+  showNotification(`Loading configuration "${configName}"...`, 'info', config.toastDuration);
+  
+  // Set values in UI fields
+  if (selectedConfig.spreadsheetUrl) {
+    document.getElementById('spreadsheetUrl').value = selectedConfig.spreadsheetUrl;
+    validateSpreadsheet();
+  }
+  
+  // Set other fields with proper timing for async operations
+  setTimeout(function() {
+    if (selectedConfig.sheetName) {
+      selectOptionByValue(document.getElementById('sheetSelect'), selectedConfig.sheetName);
+      loadSheetColumns();
       
-      setupEventListener('subjectLine', 'input', function() {
-        updateCharCounter();
-        updateSummary();
-      });
-      
-      setupEventListener('fromEmailSelect', 'change', updateSummary);
-      setupEventListener('fromName', 'input', updateSummary);
-      setupEventListener('emailColumnSelect', 'change', updateSummary);
-      
-      // Initialize character counter
-      updateCharCounter();
-      
-      // Set initial tooltip state
-      toggleTooltips(config.showTooltips);
-      
-      // Add keyboard accessibility for placeholder items
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          if (e.target.hasAttribute('role') && e.target.getAttribute('role') === 'button') {
-            e.preventDefault();
-            e.target.click();
+      setTimeout(function() {
+        if (selectedConfig.emailColumn) {
+          selectOptionByValue(document.getElementById('emailColumnSelect'), selectedConfig.emailColumn);
+        }
+        
+        if (selectedConfig.ccColumn || selectedConfig.bccColumn) {
+          if (document.getElementById('ccColumnGroup').classList.contains('hidden')) {
+            toggleCcBcc();
+          }
+          
+          if (selectedConfig.ccColumn) {
+            selectOptionByValue(document.getElementById('ccColumnSelect'), selectedConfig.ccColumn);
+          }
+          
+          if (selectedConfig.bccColumn) {
+            selectOptionByValue(document.getElementById('bccColumnSelect'), selectedConfig.bccColumn);
           }
         }
-      });
-      
-      console.log('UI initialization completed');
-    } catch (error) {
-      console.error('Error during initialization:', error);
-      alert('There was an error initializing the UI. Please reload the page.');
+        
+        // Set remaining fields
+        if (selectedConfig.fromName) {
+          document.getElementById('fromName').value = selectedConfig.fromName;
+        }
+        
+        if (selectedConfig.fromEmail) {
+          selectOptionByValue(document.getElementById('fromEmailSelect'), selectedConfig.fromEmail);
+        }
+        
+        if (selectedConfig.subjectLine) {
+          document.getElementById('subjectLine').value = selectedConfig.subjectLine;
+          updateCharCounter();
+        }
+        
+        // Set CC/BCC overrides if they exist
+        if (selectedConfig.ccOverride && document.getElementById('ccField')) {
+          document.getElementById('ccField').value = selectedConfig.ccOverride;
+        }
+        
+        if (selectedConfig.bccOverride && document.getElementById('bccField')) {
+          document.getElementById('bccField').value = selectedConfig.bccOverride;
+        }
+        
+        // Show indicator of which config is active
+        document.getElementById('activeConfigName').textContent = configName;
+        document.getElementById('activeConfigIndicator').classList.remove('hidden');
+        
+        // Update summary
+        updateSummary();
+        
+        showNotification(`Configuration "${configName}" loaded`, 'success', config.toastDuration);
+      }, 1500);
     }
+  }, 1500);
+}
+
+// Clear all fields
+function clearAllFields() {
+  if (confirm('Are you sure you want to reset all fields?')) {
+    // Reset fields
+    document.getElementById('spreadsheetUrl').value = '';
+    document.getElementById('sheetSelect').innerHTML = '<option value="">Select a sheet...</option>';
+    document.getElementById('emailColumnSelect').innerHTML = '<option value="">Select recipients column...</option>';
+    document.getElementById('ccColumnSelect').innerHTML = '<option value="">None (Optional)</option>';
+    document.getElementById('bccColumnSelect').innerHTML = '<option value="">None (Optional)</option>';
+    document.getElementById('subjectLine').value = '';
+    document.getElementById('testEmailAddress').value = '';
+    
+    // Hide conditional sections
+    toggleVisibility('loadSheetsGroup', false);
+    toggleVisibility('sheetSelectGroup', false);
+    toggleVisibility('loadColumnsGroup', false);
+    toggleVisibility('emailColumnGroup', false);
+    toggleVisibility('ccColumnGroup', false);
+    toggleVisibility('bccColumnGroup', false);
+    
+    // Hide active config indicator
+    document.getElementById('activeConfigIndicator').classList.add('hidden');
+    
+    // Reset dropdown
+    document.getElementById('configSelect').value = '';
+    
+    // Update UI
+    updateCharCounter();
+    updateSummary();
+    
+    showNotification('All fields reset', 'info', config.toastDuration);
+  }
+}
+
+// Helper to select option by value
+function selectOptionByValue(selectElement, value) {
+  if (!selectElement) return false;
+  
+  for (let i = 0; i < selectElement.options.length; i++) {
+    if (selectElement.options[i].value === value) {
+      selectElement.selectedIndex = i;
+      // Trigger change event
+      const event = new Event('change');
+      selectElement.dispatchEvent(event);
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Check if configurations need refreshing (when returning from dialog)
+function setupConfigurationRefreshCheck() {
+  // Check when window regains focus (likely coming back from dialog)
+  window.addEventListener('focus', function() {
+    google.script.run
+      .withSuccessHandler(function(needsRefresh) {
+        if (needsRefresh) {
+          console.log('Configurations updated, refreshing list...');
+          loadConfigurationList();
+        }
+      })
+      .checkConfigurationsNeedRefresh();
   });
+}
+
+// Add this to the document.addEventListener('DOMContentLoaded', function() { section:
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    console.log('DOM Content Loaded - Initializing UI');
+    
+    // Load configuration list
+    loadConfigurationList();
+    
+    // Load sender emails
+    loadSenderEmails();
+    
+    // Load quota info when the page loads (with a small delay to ensure UI elements are ready)
+    setTimeout(loadQuotaInfo, 500);
+    
+    // Set up event listeners
+    const setupEventListener = function(id, event, handler) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.addEventListener(event, handler);
+      } else {
+        console.warn(`Element with ID "${id}" not found for event binding`);
+      }
+    };
+    
+    setupEventListener('subjectLine', 'input', function() {
+      updateCharCounter();
+      updateSummary();
+    });
+    
+    setupEventListener('fromEmailSelect', 'change', updateSummary);
+    setupEventListener('fromName', 'input', updateSummary);
+    setupEventListener('emailColumnSelect', 'change', updateSummary);
+    
+    // Initialize character counter
+    updateCharCounter();
+    
+    // Set initial tooltip state
+    toggleTooltips(config.showTooltips);
+    
+    // Add keyboard accessibility for placeholder items
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (e.target.hasAttribute('role') && e.target.getAttribute('role') === 'button') {
+          e.preventDefault();
+          e.target.click();
+        }
+      }
+    });
+    
+    // Setup check for configuration updates
+    setupConfigurationRefreshCheck();
+    
+    console.log('UI initialization completed');
+  } catch (error) {
+    console.error('Error during initialization:', error);
+    alert('There was an error initializing the UI. Please reload the page.');
+  }
+});
+  // Check when window regains focus (likely coming back from dialog)
+  window.addEventListener('focus', function() {
+    google.script.run
+      .withSuccessHandler(function(needsRefresh) {
+        if (needsRefresh) {
+          console.log('Configurations updated, refreshing list...');
+          loadConfigurationList();
+        }
+      })
+      .checkConfigurationsNeedRefresh();
+  });
+
 </script>

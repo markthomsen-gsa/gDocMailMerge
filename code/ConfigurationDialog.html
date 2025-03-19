@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 16px;
+      font-size: 13px;
+      color: #202124;
+      margin: 0;
+      overflow-x: hidden;
+      box-sizing: border-box;
+      width: 100%;
+    }
+    
+    h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 16px;
+      font-weight: normal;
+      color: #202124;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+      width: 100%;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #5f6368;
+    }
+    
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 24px;
+      width: 100%;
+    }
+    
+    button {
+      flex: 1;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    
+    .primary {
+      background-color: #4285f4;
+      color: white;
+    }
+    
+    .secondary {
+      background-color: #f1f3f4;
+      color: #202124;
+      border: 1px solid #dadce0;
+    }
+    
+    .warning {
+      background-color: #ea4335;
+      color: white;
+    }
+    
+    .success {
+      background-color: #1e8e3e;
+      color: white;
+    }
+    
+    .message {
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-top: 8px;
+      display: none;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .error {
+      background-color: #fce8e6;
+      border: 1px solid #ea4335;
+      color: #b31412;
+    }
+    
+    .success-msg {
+      background-color: #e6f4ea;
+      border: 1px solid #34a853;
+      color: #137333;
+    }
+    
+    .divider {
+      margin: 24px 0;
+      border-top: 1px solid #dadce0;
+      width: 100%;
+    }
+    
+    /* Setting groups */
+    .settings-section {
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .settings-section h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #202124;
+    }
+    
+    /* Fixed layout for setting items */
+    .setting-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-gap: 8px;
+      align-items: start;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e0e0e0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .setting-item:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    
+    .setting-checkbox {
+      margin-top: 4px;
+      grid-column: 1;
+      width: 16px;
+      height: 16px;
+    }
+    
+    .setting-input {
+      grid-column: 2;
+      width: 100%;
+    }
+    
+    .setting-input label {
+      margin-bottom: 4px;
+    }
+    
+    .setting-input input {
+      width: 100%;
+      padding: 6px;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+    
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #dadce0;
+      margin-bottom: 16px;
+      width: 100%;
+    }
+    
+    .tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+      margin-bottom: -1px;
+    }
+    
+    .tab.active {
+      background-color: white;
+      border-color: #dadce0;
+      border-bottom: 1px solid white;
+      font-weight: 500;
+    }
+    
+    .tab-content {
+      display: none;
+      width: 100%;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    /* Configuration details panel */
+    .config-details {
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 12px;
+      margin-top: 16px;
+      background-color: #f8f9fa;
+      max-height: 300px;
+      overflow-y: auto;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .detail-group {
+      margin-bottom: 16px;
+    }
+    
+    .detail-group h5 {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      font-weight: 500;
+      color: #202124;
+      border-bottom: 1px solid #dadce0;
+      padding-bottom: 4px;
+    }
+    
+    .detail-item {
+      display: flex;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    
+    .detail-label {
+      width: 120px;
+      color: #5f6368;
+      flex-shrink: 0;
+    }
+    
+    .detail-value {
+      flex: 1;
+      word-break: break-word;
+    }
+    
+    /* Close button */
+    .close-button {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: #f1f3f4;
+      border: 1px solid #dadce0;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    /* Container to ensure proper width constraints */
+    .container {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* Edit mode indicator */
+    .edit-mode-indicator {
+      background-color: #e8f0fe;
+      border: 1px solid #4285f4;
+      border-radius: 4px;
+      padding: 8px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #1a73e8;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h3>Mail Merge Configuration Manager</h3>
+    
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('saveTab')">Save Configuration</div>
+      <div class="tab" onclick="switchTab('manageTab')">Manage Configurations</div>
+    </div>
+    
+    <!-- Save Tab -->
+    <div id="saveTab" class="tab-content active">
+      <!-- Edit mode indicator -->
+      <div id="editModeIndicator" class="edit-mode-indicator">
+        Editing configuration: <span id="editingConfigName">-</span>
+      </div>
+    
+      <div class="form-group">
+        <label for="newConfigName">Configuration Name</label>
+        <input type="text" id="newConfigName" placeholder="Enter a name for this configuration">
+      </div>
+      
+      <!-- Data Source Settings -->
+      <div class="settings-section">
+        <h4>Data Source Settings</h4>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveSpreadsheetUrl" class="setting-checkbox" checked>
+          <div class="setting-input">
+            <label for="spreadsheetUrlValue">Spreadsheet URL</label>
+            <input type="text" id="spreadsheetUrlValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveSheetName" class="setting-checkbox" checked>
+          <div class="setting-input">
+            <label for="sheetNameValue">Sheet Name</label>
+            <input type="text" id="sheetNameValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveEmailColumn" class="setting-checkbox" checked>
+          <div class="setting-input">
+            <label for="emailColumnValue">Recipients Column</label>
+            <input type="text" id="emailColumnValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveCcColumn" class="setting-checkbox">
+          <div class="setting-input">
+            <label for="ccColumnValue">CC Column (Optional)</label>
+            <input type="text" id="ccColumnValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveBccColumn" class="setting-checkbox">
+          <div class="setting-input">
+            <label for="bccColumnValue">BCC Column (Optional)</label>
+            <input type="text" id="bccColumnValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+      </div>
+      
+      <!-- Email Settings -->
+      <div class="settings-section">
+        <h4>Email Settings</h4>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveFromEmail" class="setting-checkbox" checked>
+          <div class="setting-input">
+            <label for="fromEmailValue">From Email</label>
+            <input type="text" id="fromEmailValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveFromName" class="setting-checkbox" checked>
+          <div class="setting-input">
+            <label for="fromNameValue">Display Name</label>
+            <input type="text" id="fromNameValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveSubjectLine" class="setting-checkbox" checked>
+          <div class="setting-input">
+            <label for="subjectLineValue">Subject Line</label>
+            <input type="text" id="subjectLineValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveCcOverride" class="setting-checkbox">
+          <div class="setting-input">
+            <label for="ccOverrideValue">CC Override (Optional)</label>
+            <input type="text" id="ccOverrideValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveBccOverride" class="setting-checkbox">
+          <div class="setting-input">
+            <label for="bccOverrideValue">BCC Override (Optional)</label>
+            <input type="text" id="bccOverrideValue" placeholder="Will use current value when saving">
+          </div>
+        </div>
+      </div>
+      
+      <div class="actions">
+        <button id="clearFormBtn" class="secondary" onclick="clearForm()" style="flex: 0.5;">Clear Form</button>
+        <button id="saveBtn" class="primary" onclick="saveConfiguration()">Save Configuration</button>
+      </div>
+      <div id="saveMessage" class="message"></div>
+    </div>
+    
+    <!-- Manage Tab -->
+    <div id="manageTab" class="tab-content">
+      <div class="form-group">
+        <label for="existingConfig">Existing Configurations</label>
+        <select id="existingConfig" onchange="showConfigDetails()">
+          <option value="">Select a configuration...</option>
+        </select>
+      </div>
+      
+      <!-- Configuration Details -->
+      <div id="configDetails" class="config-details" style="display: none;">
+        <h4>Configuration Details</h4>
+        
+        <div class="detail-group" id="dataSourceDetails">
+          <h5>Data Source</h5>
+          <!-- Will be populated dynamically -->
+        </div>
+        
+        <div class="detail-group" id="emailDetails">
+          <h5>Email Settings</h5>
+          <!-- Will be populated dynamically -->
+        </div>
+      </div>
+      
+      <div class="actions">
+        <button id="editConfigBtn" class="primary" onclick="editSelectedConfig()">Edit</button>
+        <button id="loadConfigBtn" class="secondary" onclick="loadSelectedConfig()">Load in Sidebar</button>
+        <button id="deleteBtn" class="warning" onclick="deleteConfig()">Delete</button>
+      </div>
+      
+      <div id="manageMessage" class="message"></div>
+    </div>
+  </div>
+
+  <script>
+    // Global variables
+    let configurations = {};
+    let editMode = false;
+    let originalConfigName = '';
+    
+    // Load saved configurations on init
+    document.addEventListener('DOMContentLoaded', function() {
+      loadConfigurations();
+      loadCurrentValues();
+    });
+    
+    // Switch between tabs
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      
+      if (tabId === 'saveTab') {
+        document.querySelector('.tab:nth-child(1)').classList.add('active');
+        document.getElementById('saveTab').classList.add('active');
+      } else {
+        document.querySelector('.tab:nth-child(2)').classList.add('active');
+        document.getElementById('manageTab').classList.add('active');
+      }
+    }
+    
+    // Load available configurations
+    function loadConfigurations() {
+      google.script.run
+        .withSuccessHandler(function(configs) {
+          // Store configurations globally
+          configurations = configs || {};
+          
+          const select = document.getElementById('existingConfig');
+          select.innerHTML = '<option value="">Select a configuration...</option>';
+          
+          if (configs && Object.keys(configs).length > 0) {
+            for (const name in configs) {
+              const option = document.createElement('option');
+              option.value = name;
+              option.textContent = name;
+              select.appendChild(option);
+            }
+          }
+        })
+        .getAvailableConfigurations();
+    }
+    
+    // Show configuration details when selected
+    function showConfigDetails() {
+      const selectedConfig = document.getElementById('existingConfig').value;
+      const detailsPanel = document.getElementById('configDetails');
+      
+      if (!selectedConfig) {
+        detailsPanel.style.display = 'none';
+        return;
+      }
+      
+      const config = configurations[selectedConfig];
+      if (!config) {
+        detailsPanel.style.display = 'none';
+        return;
+      }
+      
+      // Show the details panel
+      detailsPanel.style.display = 'block';
+      
+      // Populate Data Source details
+      const dataSourceDetails = document.getElementById('dataSourceDetails');
+      dataSourceDetails.innerHTML = '<h5>Data Source</h5>';
+      
+      addDetailItem(dataSourceDetails, 'Spreadsheet URL', config.spreadsheetUrl || 'Not set');
+      addDetailItem(dataSourceDetails, 'Sheet Name', config.sheetName || 'Not set');
+      addDetailItem(dataSourceDetails, 'Recipients Column', config.emailColumn || 'Not set');
+      addDetailItem(dataSourceDetails, 'CC Column', config.ccColumn || 'Not set');
+      addDetailItem(dataSourceDetails, 'BCC Column', config.bccColumn || 'Not set');
+      
+      // Populate Email Settings details
+      const emailDetails = document.getElementById('emailDetails');
+      emailDetails.innerHTML = '<h5>Email Settings</h5>';
+      
+      addDetailItem(emailDetails, 'From Email', config.fromEmail || 'Not set');
+      addDetailItem(emailDetails, 'Display Name', config.fromName || 'Not set');
+      addDetailItem(emailDetails, 'Subject Line', config.subjectLine || 'Not set');
+      addDetailItem(emailDetails, 'CC Override', config.ccOverride || 'Not set');
+      addDetailItem(emailDetails, 'BCC Override', config.bccOverride || 'Not set');
+    }
+    
+    // Helper function to add a detail item
+    function addDetailItem(container, label, value) {
+      const item = document.createElement('div');
+      item.className = 'detail-item';
+      
+      const labelElement = document.createElement('div');
+      labelElement.className = 'detail-label';
+      labelElement.textContent = label + ':';
+      
+      const valueElement = document.createElement('div');
+      valueElement.className = 'detail-value';
+      valueElement.textContent = value;
+      
+      item.appendChild(labelElement);
+      item.appendChild(valueElement);
+      container.appendChild(item);
+    }
+    
+    // Load configuration into the edit form
+    function editSelectedConfig() {
+      const configName = document.getElementById('existingConfig').value;
+      if (!configName) {
+        showMessage('manageMessage', 'Please select a configuration to edit', 'error');
+        return;
+      }
+      
+      const config = configurations[configName];
+      if (!config) {
+        showMessage('manageMessage', 'Configuration not found', 'error');
+        return;
+      }
+      
+      // Set form to edit mode
+      editMode = true;
+      originalConfigName = configName;
+      
+      // Show edit mode indicator
+      document.getElementById('editingConfigName').textContent = configName;
+      document.getElementById('editModeIndicator').style.display = 'block';
+      
+      // Set configuration name
+      document.getElementById('newConfigName').value = configName;
+      
+      // Set Data Source fields
+      setFieldAndCheckbox('saveSpreadsheetUrl', 'spreadsheetUrlValue', config.spreadsheetUrl);
+      setFieldAndCheckbox('saveSheetName', 'sheetNameValue', config.sheetName);
+      setFieldAndCheckbox('saveEmailColumn', 'emailColumnValue', config.emailColumn);
+      setFieldAndCheckbox('saveCcColumn', 'ccColumnValue', config.ccColumn);
+      setFieldAndCheckbox('saveBccColumn', 'bccColumnValue', config.bccColumn);
+      
+      // Set Email Settings fields
+      setFieldAndCheckbox('saveFromEmail', 'fromEmailValue', config.fromEmail);
+      setFieldAndCheckbox('saveFromName', 'fromNameValue', config.fromName);
+      setFieldAndCheckbox('saveSubjectLine', 'subjectLineValue', config.subjectLine);
+      setFieldAndCheckbox('saveCcOverride', 'ccOverrideValue', config.ccOverride);
+      setFieldAndCheckbox('saveBccOverride', 'bccOverrideValue', config.bccOverride);
+      
+      // Switch to Save tab
+      switchTab('saveTab');
+    }
+    
+    // Helper to set a field and its checkbox
+    function setFieldAndCheckbox(checkboxId, fieldId, value) {
+      const field = document.getElementById(fieldId);
+      const checkbox = document.getElementById(checkboxId);
+      
+      if (value) {
+        field.value = value;
+        checkbox.checked = true;
+      } else {
+        field.value = '';
+        checkbox.checked = false;
+      }
+    }
+    
+    // Load selected configuration in sidebar
+    function loadSelectedConfig() {
+      const configName = document.getElementById('existingConfig').value;
+      if (!configName) {
+        showMessage('manageMessage', 'Please select a configuration to load', 'error');
+        return;
+      }
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            // Set flag to refresh configurations when returning to sidebar
+            google.script.run.setConfigurationRefreshFlag();
+            
+            showMessage('manageMessage', 'Configuration loaded in sidebar successfully!', 'success-msg');
+            setTimeout(function() {
+              google.script.host.close();
+            }, 1500);
+          } else {
+            showMessage('manageMessage', result.message || 'Error loading configuration', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showMessage('manageMessage', error.message || 'Error loading configuration', 'error');
+        })
+        .loadConfiguration(configName);
+    }
+    
+    // Load current values from sidebar
+    function loadCurrentValues() {
+      google.script.run
+        .withSuccessHandler(function(values) {
+          // Populate values in form
+          if (values.spreadsheetUrl) {
+            document.getElementById('spreadsheetUrlValue').value = values.spreadsheetUrl;
+          }
+          
+          if (values.sheetName) {
+            document.getElementById('sheetNameValue').value = values.sheetName;
+          }
+          
+          if (values.emailColumn) {
+            document.getElementById('emailColumnValue').value = values.emailColumn;
+          }
+          
+          if (values.ccColumn) {
+            document.getElementById('ccColumnValue').value = values.ccColumn;
+          }
+          
+          if (values.bccColumn) {
+            document.getElementById('bccColumnValue').value = values.bccColumn;
+          }
+          
+          if (values.fromEmail) {
+            document.getElementById('fromEmailValue').value = values.fromEmail;
+          }
+          
+          if (values.fromName) {
+            document.getElementById('fromNameValue').value = values.fromName;
+          }
+          
+          if (values.subjectLine) {
+            document.getElementById('subjectLineValue').value = values.subjectLine;
+          }
+          
+          if (values.ccOverride) {
+            document.getElementById('ccOverrideValue').value = values.ccOverride;
+          }
+          
+          if (values.bccOverride) {
+            document.getElementById('bccOverrideValue').value = values.bccOverride;
+          }
+        })
+        .getCurrentSidebarValues();
+    }
+    
+    // Save configuration (handles both new and edits)
+    function saveConfiguration() {
+      const name = document.getElementById('newConfigName').value.trim();
+      if (!name) {
+        showMessage('saveMessage', 'Please enter a configuration name', 'error');
+        return;
+      }
+      
+      // Build configuration based on checkboxes and values
+      const config = {};
+      
+      // Data Source settings
+      if (document.getElementById('saveSpreadsheetUrl').checked) {
+        config.spreadsheetUrl = document.getElementById('spreadsheetUrlValue').value;
+      }
+      
+      if (document.getElementById('saveSheetName').checked) {
+        config.sheetName = document.getElementById('sheetNameValue').value;
+      }
+      
+      if (document.getElementById('saveEmailColumn').checked) {
+        config.emailColumn = document.getElementById('emailColumnValue').value;
+      }
+      
+      if (document.getElementById('saveCcColumn').checked) {
+        config.ccColumn = document.getElementById('ccColumnValue').value;
+      }
+      
+      if (document.getElementById('saveBccColumn').checked) {
+        config.bccColumn = document.getElementById('bccColumnValue').value;
+      }
+      
+      // Email settings
+      if (document.getElementById('saveFromEmail').checked) {
+        config.fromEmail = document.getElementById('fromEmailValue').value;
+      }
+      
+      if (document.getElementById('saveFromName').checked) {
+        config.fromName = document.getElementById('fromNameValue').value;
+      }
+      
+      if (document.getElementById('saveSubjectLine').checked) {
+        config.subjectLine = document.getElementById('subjectLineValue').value;
+      }
+      
+      if (document.getElementById('saveCcOverride').checked) {
+        config.ccOverride = document.getElementById('ccOverrideValue').value;
+      }
+      
+      if (document.getElementById('saveBccOverride').checked) {
+        config.bccOverride = document.getElementById('bccOverrideValue').value;
+      }
+      
+      // Check if we need to handle an edit with name change
+      let deleteOldConfig = false;
+      if (editMode && originalConfigName !== name) {
+        deleteOldConfig = true;
+      }
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            // Set flag to refresh configurations when returning to sidebar
+            google.script.run.setConfigurationRefreshFlag();
+            
+            // Handle name changes in edit mode - delete old config
+            if (deleteOldConfig) {
+              google.script.run
+                .withSuccessHandler(function() {
+                  // Success deleting old config
+                  showSaveSuccess(name);
+                })
+                .withFailureHandler(function(error) {
+                  // Failed deleting old config
+                  showMessage('saveMessage', 'Warning: Saved as new but failed to delete old: ' + error.message, 'error');
+                })
+                .deleteConfiguration(originalConfigName);
+            } else {
+              showSaveSuccess(name);
+            }
+          } else {
+            showMessage('saveMessage', result.message || 'Error saving configuration', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showMessage('saveMessage', error.message || 'Error saving configuration', 'error');
+        })
+        .saveConfigurationWithValues(name, config);
+    }
+    
+    // Show save success
+    function showSaveSuccess(name) {
+      const action = editMode ? "updated" : "saved";
+      showMessage('saveMessage', `Configuration "${name}" ${action} successfully!`, 'success-msg');
+      
+      // Reset form
+      clearForm();
+      
+      // Reload configurations
+      loadConfigurations();
+    }
+    
+    // Clear the form and reset edit mode
+    function clearForm() {
+      // Reset edit mode
+      editMode = false;
+      originalConfigName = '';
+      document.getElementById('editModeIndicator').style.display = 'none';
+      
+      // Clear fields
+      document.getElementById('newConfigName').value = '';
+      
+      // Reset Data Source fields but keep checkboxes checked
+      resetField('spreadsheetUrlValue', true);
+      resetField('sheetNameValue', true);
+      resetField('emailColumnValue', true);
+      resetField('ccColumnValue', false);
+      resetField('bccColumnValue', false);
+      
+      // Reset Email Settings fields
+      resetField('fromEmailValue', true);
+      resetField('fromNameValue', true);
+      resetField('subjectLineValue', true);
+      resetField('ccOverrideValue', false);
+      resetField('bccOverrideValue', false);
+      
+      // Reload current values from sidebar (optional)
+      loadCurrentValues();
+    }
+    
+    // Helper to reset a field
+    function resetField(fieldId, checked) {
+      document.getElementById(fieldId).value = '';
+      document.getElementById('save' + fieldId.charAt(0).toUpperCase() + fieldId.slice(1)).checked = checked;
+    }
+    
+    // Delete selected configuration
+    function deleteConfig() {
+      const name = document.getElementById('existingConfig').value;
+      if (!name) {
+        showMessage('manageMessage', 'Please select a configuration to delete', 'error');
+        return;
+      }
+      
+      if (confirm('Are you sure you want to delete "' + name + '"? This cannot be undone.')) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.success) {
+              // Set flag to refresh configurations when returning to sidebar
+              google.script.run.setConfigurationRefreshFlag();
+              
+              showMessage('manageMessage', 'Configuration deleted successfully!', 'success-msg');
+              document.getElementById('configDetails').style.display = 'none';
+              loadConfigurations();
+            } else {
+              showMessage('manageMessage', result.message || 'Error deleting configuration', 'error');
+            }
+          })
+          .withFailureHandler(function(error) {
+            showMessage('manageMessage', error.message || 'Error deleting configuration', 'error');
+          })
+          .deleteConfiguration(name);
+      }
+    }
+    
+    // Show a message
+    function showMessage(elementId, message, type) {
+      const element = document.getElementById(elementId);
+      element.textContent = message;
+      element.className = 'message ' + type;
+      element.style.display = 'block';
+      
+      setTimeout(function() {
+        element.style.display = 'none';
+      }, 5000);
+    }
+  </script>
+</body>
+</html>

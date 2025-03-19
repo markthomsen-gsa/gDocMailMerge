@@ -496,6 +496,58 @@
     <p>Streamlined email distribution</p>
   </div>
   
+<!-- Quick Settings Panel (Panel 0) - Add this just after the header section and before your first existing panel -->
+<div id="configuration" class="section">
+  <div class="section-indicator">
+    <div class="section-indicator-bar" style="height: 60px;"></div>
+  </div>
+  
+  <div class="section-header" onclick="toggleSection('configuration')" aria-expanded="false" aria-controls="configurationContent">
+    <div class="section-title">
+      <span class="section-number">00</span>
+      Quick Settings
+    </div>
+    <div class="section-toggle">
+      <div class="toggle-indicator" aria-hidden="true">+</div>
+      <div class="toggle-bar"></div>
+    </div>
+  </div>
+  
+  <div id="configurationContent" class="section-content">
+    <div class="form-group">
+      <label for="configSelect">Saved Configurations <span class="tooltip help-icon"><span class="tooltip-text">Select a saved configuration to quickly set up your mail merge</span></span></label>
+      <select id="configSelect" aria-label="Select Configuration">
+        <option value="">Select a configuration...</option>
+        <!-- Options populated by JavaScript -->
+      </select>
+    </div>
+    
+    <div class="form-group" style="text-align: right;">
+      <a href="#" onclick="loadConfigurationList(); return false;" class="small-link">
+        <span style="margin-right: 4px;">↻</span> Refresh list
+      </a>
+    </div>
+    
+    <div class="form-group">
+      <button id="loadConfigBtn" onclick="loadSelectedConfig()" style="display: flex; align-items: center; justify-content: center;" aria-label="Load Configuration">
+        <span style="margin-right: 6px;">↓</span> Load Settings
+      </button>
+    </div>
+    
+    <div class="form-group">
+      <button id="clearConfigBtn" onclick="clearAllFields()" class="secondary" style="display: flex; align-items: center; justify-content: center; background-color: #f1f3f4; color: #202124;" aria-label="Clear All Fields">
+        <span style="margin-right: 6px;">✕</span> Reset All Fields
+      </button>
+    </div>
+    
+    <div id="activeConfigIndicator" class="alert alert-info hidden">
+      <div class="alert-icon">ℹ</div>
+      <div>Using: <span id="activeConfigName">-</span></div>
+    </div>
+  </div>
+</div>
+
+
   <!-- Data Source Section -->
   <div id="dataSource" class="section active">
     <div class="section-indicator">

@@ -6,25 +6,6 @@
 
 "use strict";
 
-// Create a menu when the document is opened
-function onOpen() {
-  DocumentApp.getUi()
-      .createMenu('📧 Mail Merge')
-      .addItem('Open Mail Merge Sidebar', 'showSidebar')
-      .addToUi();
-}
-
-/**
- * Shows the mail merge sidebar.
- */
-function showSidebar() {
-  const ui = HtmlService.createTemplateFromFile('TabMailMergeSidebar')
-      .evaluate()
-      .setTitle('Mail Merge')
-      .setSandboxMode(HtmlService.SandboxMode.IFRAME);
-  DocumentApp.getUi().showSidebar(ui);
-}
-
 /**
  * Gets HTML content from a file.
  * @param {string} filename - The name of the HTML file.
@@ -786,4 +767,212 @@ function validateSpreadsheet(spreadsheetUrl) {
       message: "Invalid spreadsheet: " + e.message
     };
   }
+}
+
+/**
+ * Shows the configuration management dialog.
+ */
+function showConfigDialog() {
+  const ui = HtmlService.createTemplateFromFile('ConfigurationDialog')
+      .evaluate()
+      .setWidth(500)
+      .setHeight(600)
+      .setSandboxMode(HtmlService.SandboxMode.IFRAME);
+  
+  DocumentApp.getUi().showModalDialog(ui, 'Mail Merge Configuration');
+}
+
+/**
+ * Gets all available configurations from document properties.
+ * @return {Object} Configurations object.
+ */
+function getAvailableConfigurations() {
+  try {
+    const docProperties = PropertiesService.getDocumentProperties();
+    const configsJson = docProperties.getProperty('mailMergeConfigs') || '{}';
+    return JSON.parse(configsJson);
+  } catch (e) {
+    Logger.log("Error getting configurations: " + e.message);
+    return {};
+  }
+}
+
+/**
+ * Gets current values from the sidebar UI.
+ * Used by the configuration dialog to show current values.
+ * @return {Object} Current sidebar values.
+ */
+function getCurrentSidebarValues() {
+  try {
+    // Create a temporary object to hold the values we can access
+    const values = {};
+    
+    // Try to access document values that are readily available
+    const doc = DocumentApp.getActiveDocument();
+    if (doc) {
+      // Could potentially get subject line from document title or other metadata
+      values.subjectLine = doc.getName().replace(/\.docx?$/i, '');
+    }
+    
+    // Get user email if available
+    try {
+      values.fromEmail = Session.getActiveUser().getEmail();
+      // Format display name from email
+      if (values.fromEmail) {
+        const namePart = values.fromEmail.split('@')[0];
+        values.fromName = formatNameFromEmail(namePart);
+      }
+    } catch (emailError) {
+      Logger.log("Couldn't get user email: " + emailError.message);
+    }
+    
+    // At this point, this is basically a placeholder function
+    // In a full implementation, you'd need a more complex mechanism to 
+    // retrieve the current values from the sidebar
+    
+    return values;
+  } catch (e) {
+    Logger.log("Error getting sidebar values: " + e.message);
+    return {};
+  }
+}
+
+/**
+ * Saves a configuration with specific values.
+ * @param {string} name - The configuration name.
+ * @param {Object} values - The values to save.
+ * @return {Object} Result with success flag and message.
+ */
+function saveConfigurationWithValues(name, values) {
+  try {
+    if (!name) {
+      return { success: false, message: "Configuration name is required" };
+    }
+    
+    const docProperties = PropertiesService.getDocumentProperties();
+    const configsJson = docProperties.getProperty('mailMergeConfigs') || '{}';
+    const configs = JSON.parse(configsJson);
+    
+    // Add to configs
+    configs[name] = values;
+    
+    // Save back to document properties
+    docProperties.setProperty('mailMergeConfigs', JSON.stringify(configs));
+    
+    return { success: true, message: 'Configuration saved successfully!' };
+  } catch (e) {
+    Logger.log("Error saving configuration: " + e.message);
+    return { success: false, message: 'Error saving configuration: ' + e.message };
+  }
+}
+
+/**
+ * Loads a configuration.
+ * @param {string} name - The configuration name.
+ * @return {Object} Result with success flag and loaded config.
+ */
+function loadConfiguration(name) {
+  try {
+    const configs = getAvailableConfigurations();
+    const config = configs[name];
+    
+    if (!config) {
+      return { success: false, message: 'Configuration not found' };
+    }
+    
+    // Store active configuration
+    const docProperties = PropertiesService.getDocumentProperties();
+    docProperties.setProperty('activeMailMergeConfig', JSON.stringify(config));
+    
+    return { success: true, config: config };
+  } catch (e) {
+    Logger.log("Error loading configuration: " + e.message);
+    return { success: false, message: 'Error loading configuration: ' + e.message };
+  }
+}
+
+/**
+ * Deletes a configuration.
+ * @param {string} name - The configuration name.
+ * @return {Object} Result with success flag and message.
+ */
+function deleteConfiguration(name) {
+  try {
+    const docProperties = PropertiesService.getDocumentProperties();
+    const configsJson = docProperties.getProperty('mailMergeConfigs') || '{}';
+    const configs = JSON.parse(configsJson);
+    
+    if (!configs[name]) {
+      return { success: false, message: 'Configuration not found' };
+    }
+    
+    delete configs[name];
+    docProperties.setProperty('mailMergeConfigs', JSON.stringify(configs));
+    
+    return { success: true, message: 'Configuration deleted successfully' };
+  } catch (e) {
+    Logger.log("Error deleting configuration: " + e.message);
+    return { success: false, message: 'Error deleting configuration: ' + e.message };
+  }
+}
+
+/**
+ * Add menu items to onOpen function.
+ * Modify the existing onOpen() function in backend.gs to add the configuration menu item:
+ */
+function onOpen() {
+  DocumentApp.getUi()
+      .createMenu('📧 Mail Merge')
+      .addItem('Open Mail Merge Sidebar', 'showSidebar')
+      .addSeparator()
+      .addItem('Manage Configurations...', 'showConfigDialog')
+      .addToUi();
+}
+
+/**
+ * Shows the configuration management dialog with improved size and handling.
+ */
+function showConfigDialog() {
+  const ui = HtmlService.createTemplateFromFile('ConfigurationDialog')
+      .evaluate()
+      .setWidth(550)  // Increased width to prevent cutoff
+      .setHeight(650) // Increased height to accommodate the details view
+      .setTitle('Mail Merge Configuration')
+      .setSandboxMode(HtmlService.SandboxMode.IFRAME);
+  
+  DocumentApp.getUi().showModalDialog(ui, 'Mail Merge Configuration');
+}
+
+/**
+ * Shows the mail merge sidebar.
+ */
+function showSidebar() {
+  const ui = HtmlService.createTemplateFromFile('TabMailMergeSidebar')
+      .evaluate()
+      .setTitle('Mail Merge')
+      .setSandboxMode(HtmlService.SandboxMode.IFRAME);
+  DocumentApp.getUi().showSidebar(ui);
+}
+
+/**
+ * Sets a flag to indicate configurations have been updated.
+ * This will be checked when the dialog closes to refresh the sidebar.
+ */
+function setConfigurationRefreshFlag() {
+  PropertiesService.getUserProperties().setProperty('configurationUpdated', 'true');
+}
+
+/**
+ * Checks if configurations have been updated and need refreshing.
+ * @return {boolean} True if the sidebar should refresh configurations.
+ */
+function checkConfigurationsNeedRefresh() {
+  const needsRefresh = PropertiesService.getUserProperties().getProperty('configurationUpdated') === 'true';
+  
+  // Clear the flag if it was set
+  if (needsRefresh) {
+    PropertiesService.getUserProperties().deleteProperty('configurationUpdated');
+  }
+  
+  return needsRefresh;
 }
