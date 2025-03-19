@@ -105,30 +105,50 @@ function setDocContent(content, config = null) {
     // Clear existing content
     body.clear();
     
-    // Add configuration section if provided
+    // Add configuration section with clear visual boundaries
     if (config) {
-      let configText = "===TEMPLATE CONFIG===\n";
+      // Add config header with distinct formatting
+      const configHeaderPara = body.appendParagraph("===TEMPLATE CONFIG===");
+      configHeaderPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+      configHeaderPara.setBackgroundColor("#e6f2ff");
       
-      // Add all configuration properties
+      // Add separator line
+      const separatorPara = body.appendParagraph("----------------------------------------");
+      separatorPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+      
+      // Add all configuration properties with bold attribute names
       for (const [key, value] of Object.entries(config)) {
-        // Handle required fields array specially
         if (key === 'requiredFields' && Array.isArray(value)) {
-          configText += `Required Fields: ${value.join(', ')}\n`;
+          const para = body.appendParagraph("");
+          const text = para.appendText(key + ": ");
+          text.setBold(true);
+          para.appendText(value.join(', '));
         } 
-        // Skip document content itself to avoid recursion
         else if (key !== 'documentContent') {
-          configText += `${key}: ${value}\n`;
+          const para = body.appendParagraph("");
+          const text = para.appendText(key + ": ");
+          text.setBold(true);
+          para.appendText(String(value));
         }
       }
       
-      // Add configuration to document
-      body.appendParagraph(configText);
+      // Add bottom separator
+      body.appendParagraph("----------------------------------------")
+          .setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     }
     
-    // Add content section markers and content
-    body.appendParagraph("===TEMPLATE CONTENT===");
+    // Add content section with clear visual marker
+    const contentHeaderPara = body.appendParagraph("===TEMPLATE CONTENT===");
+    contentHeaderPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    contentHeaderPara.setBackgroundColor("#f0f7e6");
+    
+    // Add actual content
     body.appendParagraph(content);
-    body.appendParagraph("===TEMPLATE END===");
+    
+    // Add end marker
+    const endMarkerPara = body.appendParagraph("===TEMPLATE END===");
+    endMarkerPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    endMarkerPara.setBackgroundColor("#fff2e6");
     
     return true;
   } catch (e) {
@@ -1029,10 +1049,10 @@ function saveConfigurationWithValues(name, values) {
 function getOriginalDocContent() {
   try {
     const doc = DocumentApp.getActiveDocument();
-    const body = doc.getBody().copy();
+    const body = doc.getBody();
     const text = body.getText();
     
-    // Check if the document already has template markers
+    // Check if document already has template markers
     const contentStartMarker = "===TEMPLATE CONTENT===";
     const contentEndMarker = "===TEMPLATE END===";
     
@@ -1041,8 +1061,28 @@ function getOriginalDocContent() {
     
     // If both markers exist, extract only the content between them
     if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+      // Get position after start marker plus newline
       const contentStartPos = startIndex + contentStartMarker.length;
-      return text.substring(contentStartPos, endIndex).trim();
+      
+      // Extract ONLY the content, make sure we're not including any CONFIG markers
+      const content = text.substring(contentStartPos, endIndex).trim();
+      
+      // Check if content contains another CONFIG marker (which would cause duplication)
+      if (content.includes("===TEMPLATE CONFIG===")) {
+        // Return only the portion after the last CONFIG marker
+        const lastConfigIndex = content.lastIndexOf("===TEMPLATE CONFIG===");
+        const lastContentIndex = content.lastIndexOf("===TEMPLATE CONTENT===");
+        
+        if (lastContentIndex > lastConfigIndex) {
+          // If there's a CONTENT marker after the CONFIG marker, return text after CONTENT marker
+          return content.substring(lastContentIndex + "===TEMPLATE CONTENT===".length).trim();
+        } else {
+          // Just return empty string to avoid duplication
+          return "";
+        }
+      }
+      
+      return content;
     }
     
     // If no markers, return the full content
