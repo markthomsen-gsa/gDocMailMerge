@@ -25,6 +25,29 @@ function getDocContent() {
 }
 
 /**
+ * Sets document content based on saved text.
+ * @param {string} content - Text content to set in the document
+ * @return {boolean} Success status
+ */
+function setDocContent(content) {
+  try {
+    const doc = DocumentApp.getActiveDocument();
+    const body = doc.getBody();
+    
+    // Clear existing content
+    body.clear();
+    
+    // Set new content
+    body.setText(content);
+    
+    return true;
+  } catch (e) {
+    Logger.log("Error setting document content: " + e.message);
+    return false;
+  }
+}
+
+/**
  * Gets all available email addresses that the user can send from.
  * Updated with better error handling for permission issues.
  * @return {Object[]} Array of email addresses and display names.
@@ -853,6 +876,13 @@ function saveConfigurationWithValues(name, values) {
     const configsJson = docProperties.getProperty('mailMergeConfigs') || '{}';
     const configs = JSON.parse(configsJson);
     
+    // Include document content if requested
+    if (values.includeDocumentContent) {
+      values.documentContent = getDocContent();
+      values.documentContentTimestamp = new Date().toISOString();
+      values.documentName = DocumentApp.getActiveDocument().getName();
+    }
+    
     // Add to configs
     configs[name] = values;
     
@@ -869,9 +899,10 @@ function saveConfigurationWithValues(name, values) {
 /**
  * Loads a configuration.
  * @param {string} name - The configuration name.
+ * @param {boolean} loadDocumentContent - Whether to load document content.
  * @return {Object} Result with success flag and loaded config.
  */
-function loadConfiguration(name) {
+function loadConfiguration(name, loadDocumentContent = false) {
   try {
     const configs = getAvailableConfigurations();
     const config = configs[name];
@@ -884,7 +915,23 @@ function loadConfiguration(name) {
     const docProperties = PropertiesService.getDocumentProperties();
     docProperties.setProperty('activeMailMergeConfig', JSON.stringify(config));
     
-    return { success: true, config: config };
+    // Handle document content if present and requested
+    let documentContentLoaded = false;
+    if (config.documentContent && loadDocumentContent) {
+      documentContentLoaded = setDocContent(config.documentContent);
+      if (!documentContentLoaded) {
+        return { 
+          success: false, 
+          message: 'Error loading document content. Settings were not applied.' 
+        };
+      }
+    }
+    
+    return { 
+      success: true, 
+      config: config,
+      documentContentLoaded: documentContentLoaded
+    };
   } catch (e) {
     Logger.log("Error loading configuration: " + e.message);
     return { success: false, message: 'Error loading configuration: ' + e.message };

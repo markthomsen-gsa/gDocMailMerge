@@ -1269,76 +1269,145 @@ function loadSelectedConfig() {
     return;
   }
   
-  // Show loading notification
-  showNotification(`Loading configuration "${configName}"...`, 'info', config.toastDuration);
-  
-  // Set values in UI fields
-  if (selectedConfig.spreadsheetUrl) {
-    document.getElementById('spreadsheetUrl').value = selectedConfig.spreadsheetUrl;
-    validateSpreadsheet();
+  // Check if configuration includes document content
+  if (selectedConfig.documentContent) {
+    // Show confirmation dialog
+    if (confirm('This configuration includes document content that will replace your current document. Continue?')) {
+      // User confirmed, load with document content
+      loadConfigWithContent(configName);
+    } else {
+      // User declined, load without document content
+      loadConfigWithoutContent(configName);
+    }
+  } else {
+    // No document content, proceed with normal loading
+    loadConfigWithoutContent(configName);
   }
+}
+
+// Helper function to load config with document content
+function loadConfigWithContent(configName) {
+  // Show loading notification
+  showNotification(`Loading configuration "${configName}" with document content...`, 'info', config.toastDuration);
   
-  // Set other fields with proper timing for async operations
-  setTimeout(function() {
-    if (selectedConfig.sheetName) {
-      selectOptionByValue(document.getElementById('sheetSelect'), selectedConfig.sheetName);
-      loadSheetColumns();
-      
-      setTimeout(function() {
-        if (selectedConfig.emailColumn) {
-          selectOptionByValue(document.getElementById('emailColumnSelect'), selectedConfig.emailColumn);
-        }
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        // Set flag to refresh configurations when returning to sidebar
+        google.script.run.setConfigurationRefreshFlag();
         
-        if (selectedConfig.ccColumn || selectedConfig.bccColumn) {
-          if (document.getElementById('ccColumnGroup').classList.contains('hidden')) {
-            toggleCcBcc();
-          }
-          
-          if (selectedConfig.ccColumn) {
-            selectOptionByValue(document.getElementById('ccColumnSelect'), selectedConfig.ccColumn);
-          }
-          
-          if (selectedConfig.bccColumn) {
-            selectOptionByValue(document.getElementById('bccColumnSelect'), selectedConfig.bccColumn);
-          }
-        }
+        const contentMsg = result.documentContentLoaded ? 
+          ' Document content was also restored.' : 
+          '';
+        showNotification(`Configuration "${configName}" loaded.${contentMsg}`, 'success', config.toastDuration);
         
-        // Set remaining fields
-        if (selectedConfig.fromName) {
-          document.getElementById('fromName').value = selectedConfig.fromName;
-        }
-        
-        if (selectedConfig.fromEmail) {
-          selectOptionByValue(document.getElementById('fromEmailSelect'), selectedConfig.fromEmail);
-        }
-        
-        if (selectedConfig.subjectLine) {
-          document.getElementById('subjectLine').value = selectedConfig.subjectLine;
-          updateCharCounter();
-        }
-        
-        // Set CC/BCC overrides if they exist
-        if (selectedConfig.ccOverride && document.getElementById('ccField')) {
-          document.getElementById('ccField').value = selectedConfig.ccOverride;
-        }
-        
-        if (selectedConfig.bccOverride && document.getElementById('bccField')) {
-          document.getElementById('bccField').value = selectedConfig.bccOverride;
-        }
+        // Update UI elements based on the loaded configuration
+        updateUIFromConfig(result.config);
         
         // Show indicator of which config is active
         document.getElementById('activeConfigName').textContent = configName;
         document.getElementById('activeConfigIndicator').classList.remove('hidden');
+      } else {
+        showNotification(result.message || 'Error loading configuration', 'error', config.toastDuration);
+      }
+    })
+    .withFailureHandler(function(error) {
+      showNotification(error.message || 'Error loading configuration', 'error', config.toastDuration);
+    })
+    .loadConfiguration(configName, true); // true = load document content
+}
+
+// Helper function to load config without document content
+function loadConfigWithoutContent(configName) {
+  // Show loading notification
+  showNotification(`Loading configuration "${configName}" settings...`, 'info', config.toastDuration);
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        // Set flag to refresh configurations when returning to sidebar
+        google.script.run.setConfigurationRefreshFlag();
+        
+        showNotification(`Configuration "${configName}" settings loaded`, 'success', config.toastDuration);
+        
+        // Update UI elements based on the loaded configuration
+        updateUIFromConfig(result.config);
+        
+        // Show indicator of which config is active
+        document.getElementById('activeConfigName').textContent = configName;
+        document.getElementById('activeConfigIndicator').classList.remove('hidden');
+      } else {
+        showNotification(result.message || 'Error loading configuration', 'error', config.toastDuration);
+      }
+    })
+    .withFailureHandler(function(error) {
+      showNotification(error.message || 'Error loading configuration', 'error', config.toastDuration);
+    })
+    .loadConfiguration(configName, false); // false = don't load document content
+}
+
+// Helper function to update UI elements with configuration values
+function updateUIFromConfig(config) {
+  // Set values in UI fields with proper timing for async operations
+  if (config.spreadsheetUrl) {
+    document.getElementById('spreadsheetUrl').value = config.spreadsheetUrl;
+    validateSpreadsheet();
+  }
+  
+  // We'll use setTimeout to ensure the spreadsheet validation completes
+  setTimeout(function() {
+    if (config.sheetName) {
+      selectOptionByValue(document.getElementById('sheetSelect'), config.sheetName);
+      loadSheetColumns();
+      
+      setTimeout(function() {
+        if (config.emailColumn) {
+          selectOptionByValue(document.getElementById('emailColumnSelect'), config.emailColumn);
+        }
+        
+        if (config.ccColumn || config.bccColumn) {
+          if (document.getElementById('ccColumnGroup').classList.contains('hidden')) {
+            toggleCcBcc();
+          }
+          
+          if (config.ccColumn) {
+            selectOptionByValue(document.getElementById('ccColumnSelect'), config.ccColumn);
+          }
+          
+          if (config.bccColumn) {
+            selectOptionByValue(document.getElementById('bccColumnSelect'), config.bccColumn);
+          }
+        }
+        
+        // Set remaining fields
+        if (config.fromName) {
+          document.getElementById('fromName').value = config.fromName;
+        }
+        
+        if (config.fromEmail) {
+          selectOptionByValue(document.getElementById('fromEmailSelect'), config.fromEmail);
+        }
+        
+        if (config.subjectLine) {
+          document.getElementById('subjectLine').value = config.subjectLine;
+          updateCharCounter();
+        }
+        
+        // Set CC/BCC overrides if they exist
+        if (config.ccOverride && document.getElementById('ccField')) {
+          document.getElementById('ccField').value = config.ccOverride;
+        }
+        
+        if (config.bccOverride && document.getElementById('bccField')) {
+          document.getElementById('bccField').value = config.bccOverride;
+        }
         
         // Update summary
         updateSummary();
-        
-        showNotification(`Configuration "${configName}" loaded`, 'success', config.toastDuration);
       }, 1500);
     }
   }, 1500);
 }
-
 // Clear all fields
 function clearAllFields() {
   if (confirm('Are you sure you want to reset all fields?')) {

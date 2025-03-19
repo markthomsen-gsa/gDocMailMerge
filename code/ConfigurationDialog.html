@@ -392,6 +392,22 @@
         </div>
       </div>
       
+      <!-- Document Content Settings -->
+      <div class="settings-section">
+        <h4>Document Content</h4>
+        
+        <div class="setting-item">
+          <input type="checkbox" id="saveDocumentContent" class="setting-checkbox">
+          <div class="setting-input">
+            <label for="saveDocumentContent">Include document content</label>
+            <div style="font-size: 11px; color: #5f6368; margin-top: 4px;">
+              Saves the current document text as part of this configuration.
+              When loaded, this can replace the current document's content.
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div class="actions">
         <button id="clearFormBtn" class="secondary" onclick="clearForm()" style="flex: 0.5;">Clear Form</button>
         <button id="saveBtn" class="primary" onclick="saveConfiguration()">Save Configuration</button>
@@ -419,6 +435,11 @@
         
         <div class="detail-group" id="emailDetails">
           <h5>Email Settings</h5>
+          <!-- Will be populated dynamically -->
+        </div>
+        
+        <div class="detail-group" id="docContentDetails">
+          <h5>Document Content</h5>
           <!-- Will be populated dynamically -->
         </div>
       </div>
@@ -519,6 +540,34 @@
       addDetailItem(emailDetails, 'Subject Line', config.subjectLine || 'Not set');
       addDetailItem(emailDetails, 'CC Override', config.ccOverride || 'Not set');
       addDetailItem(emailDetails, 'BCC Override', config.bccOverride || 'Not set');
+      
+      // Populate Document Content details if present
+      const docContentDetails = document.getElementById('docContentDetails');
+      docContentDetails.innerHTML = '<h5>Document Content</h5>';
+      docContentDetails.style.display = 'none';
+      
+      if (config.documentContent) {
+        // Add document content details
+        addDetailItem(docContentDetails, 'Status', 'Included');
+        addDetailItem(docContentDetails, 'Document Name', config.documentName || 'Unnamed Document');
+        
+        // Format and add timestamp if available
+        if (config.documentContentTimestamp) {
+          const timestamp = new Date(config.documentContentTimestamp);
+          const formattedDate = timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString();
+          addDetailItem(docContentDetails, 'Saved on', formattedDate);
+        }
+        
+        // Add a snippet/preview of the content
+        if (config.documentContent) {
+          const preview = config.documentContent.length > 100 ? 
+            config.documentContent.substring(0, 100) + '...' : 
+            config.documentContent;
+          addDetailItem(docContentDetails, 'Preview', preview);
+        }
+        
+        docContentDetails.style.display = 'block';
+      }
     }
     
     // Helper function to add a detail item
@@ -578,6 +627,9 @@
       setFieldAndCheckbox('saveCcOverride', 'ccOverrideValue', config.ccOverride);
       setFieldAndCheckbox('saveBccOverride', 'bccOverrideValue', config.bccOverride);
       
+      // Set Document Content checkbox
+      document.getElementById('saveDocumentContent').checked = Boolean(config.documentContent);
+      
       // Switch to Save tab
       switchTab('saveTab');
     }
@@ -604,13 +656,37 @@
         return;
       }
       
+      const config = configurations[configName];
+      if (!config) {
+        showMessage('manageMessage', 'Configuration not found', 'error');
+        return;
+      }
+      
+      // Check if configuration includes document content
+      if (config.documentContent) {
+        // Show confirmation dialog
+        if (confirm('This configuration includes document content that will replace your current document. Continue?')) {
+          // User confirmed, load with document content
+          loadConfigWithContent(configName);
+        } else {
+          // User declined, load without document content
+          loadConfigWithoutContent(configName);
+        }
+      } else {
+        // No document content, load normally
+        loadConfigWithoutContent(configName);
+      }
+    }
+    
+    // Helper function to load config with document content
+    function loadConfigWithContent(configName) {
       google.script.run
         .withSuccessHandler(function(result) {
           if (result.success) {
             // Set flag to refresh configurations when returning to sidebar
             google.script.run.setConfigurationRefreshFlag();
             
-            showMessage('manageMessage', 'Configuration loaded in sidebar successfully!', 'success-msg');
+            showMessage('manageMessage', 'Configuration loaded with document content!', 'success-msg');
             setTimeout(function() {
               google.script.host.close();
             }, 1500);
@@ -621,7 +697,29 @@
         .withFailureHandler(function(error) {
           showMessage('manageMessage', error.message || 'Error loading configuration', 'error');
         })
-        .loadConfiguration(configName);
+        .loadConfiguration(configName, true); // true = load document content
+    }
+    
+    // Helper function to load config without document content
+    function loadConfigWithoutContent(configName) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            // Set flag to refresh configurations when returning to sidebar
+            google.script.run.setConfigurationRefreshFlag();
+            
+            showMessage('manageMessage', 'Configuration settings loaded successfully!', 'success-msg');
+            setTimeout(function() {
+              google.script.host.close();
+            }, 1500);
+          } else {
+            showMessage('manageMessage', result.message || 'Error loading configuration', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showMessage('manageMessage', error.message || 'Error loading configuration', 'error');
+        })
+        .loadConfiguration(configName, false); // false = don't load document content
     }
     
     // Load current values from sidebar
@@ -725,6 +823,9 @@
         config.bccOverride = document.getElementById('bccOverrideValue').value;
       }
       
+      // Document Content setting
+      config.includeDocumentContent = document.getElementById('saveDocumentContent').checked;
+      
       // Check if we need to handle an edit with name change
       let deleteOldConfig = false;
       if (editMode && originalConfigName !== name) {
@@ -797,6 +898,9 @@
       resetField('subjectLineValue', true);
       resetField('ccOverrideValue', false);
       resetField('bccOverrideValue', false);
+      
+      // Reset Document Content checkbox
+      document.getElementById('saveDocumentContent').checked = false;
       
       // Reload current values from sidebar (optional)
       loadCurrentValues();
