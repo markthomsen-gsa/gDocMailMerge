@@ -45,57 +45,32 @@ function getDocContent() {
 
 /**
  * Gets all available email addresses that the user can send from.
- * Updated with better error handling for permission issues.
  * @return {Object[]} Array of email addresses and display names.
  */
 function getAvailableFromAddresses() {
+  const primaryEmail = Session.getActiveUser().getEmail();
+  const results = [
+    {
+      email: primaryEmail,
+      name: getUserName(),
+      isPrimary: true
+    }
+  ];
   try {
-    // Try to get the active user's email
-    const primaryEmail = Session.getActiveUser().getEmail();
-    
-    // Check if we actually got an email (empty means no permission)
-    if (!primaryEmail) {
-      throw new Error("Unable to get user email. Check permissions.");
-    }
-    
-    const results = [
-      {
-        email: primaryEmail,
-        name: getUserName(),
-        isPrimary: true
-      }
-    ];
-    
-    // Still try to get delegated addresses, but handle errors better
-    try {
-      const delegatedAddresses = getDelegatedAddresses();
-      if (delegatedAddresses && delegatedAddresses.length > 0) {
-        delegatedAddresses.forEach(addr => {
-          results.push({
-            email: addr.email,
-            name: addr.name || '',
-            isPrimary: false
-          });
+    const delegatedAddresses = getDelegatedAddresses();
+    if (delegatedAddresses && delegatedAddresses.length > 0) {
+      delegatedAddresses.forEach(addr => {
+        results.push({
+          email: addr.email,
+          name: addr.name || '',
+          isPrimary: false
         });
-      }
-    } catch (e) {
-      Logger.log("Couldn't retrieve delegated addresses: " + e.message);
-      // Just continue with primary email
+      });
     }
-    
-    return results;
   } catch (e) {
-    // If we can't get the user's email at all, return a fallback response
-    Logger.log("Error getting user email: " + e.message);
-    return [
-      {
-        email: "",
-        name: "Default Sender",
-        isPrimary: true,
-        error: "Permission denied. Authorize the app or contact the administrator."
-      }
-    ];
+    Logger.log("Couldn't retrieve delegated addresses: " + e.message);
   }
+  return results;
 }
 
 /**
@@ -109,86 +84,13 @@ function getDelegatedAddresses() {
 }
 
 /**
- * Gets all available email addresses that the user can send from.
- * Ultra-resilient version that works with heavily restricted Gmail features.
- * @return {Object[]} Array of email addresses and display names.
- */
-function getAvailableFromAddresses() {
-  try {
-    // First try to get basic user email - this should work based on your test
-    let userEmail = null;
-    let userName = null;
-    
-    try {
-      userEmail = Session.getActiveUser().getEmail();
-      // If we got an email, try to get a name
-      if (userEmail) {
-        userName = formatNameFromEmail(userEmail.split('@')[0]);
-      }
-    } catch (emailError) {
-      console.warn("Couldn't get user email:", emailError.message);
-    }
-    
-    // If we couldn't get the email, try to get effective user as fallback
-    if (!userEmail) {
-      try {
-        userEmail = Session.getEffectiveUser().getEmail();
-        if (userEmail) {
-          userName = formatNameFromEmail(userEmail.split('@')[0]); 
-        }
-      } catch (effError) {
-        console.warn("Couldn't get effective user:", effError.message);
-      }
-    }
-    
-    // If we still don't have an email, return a placeholder
-    if (!userEmail) {
-      return [{
-        email: "",
-        name: "Mail Merge User",
-        isPrimary: true,
-        error: "Unable to detect email. Please enter manually."
-      }];
-    }
-    
-    // We got a valid email, return just the primary user
-    return [{
-      email: userEmail,
-      name: userName || formatNameFromEmail(userEmail.split('@')[0]),
-      isPrimary: true
-    }];
-    
-    // Important: Skip delegation checks completely
-    // This appears to be what's failing in your domain environment
-    
-  } catch (e) {
-    console.error("Error in getAvailableFromAddresses:", e.message);
-    return [{
-      email: "",
-      name: "Mail Merge User",
-      isPrimary: true,
-      error: "Error detecting email address."
-    }];
-  }
-}
-
-/**
  * Gets the user's display name from their Google Account.
- * Now with better error handling.
- * @return {string} The user's name or default value if not available.
+ * @return {string} The user's name or email if name is not available.
  */
 function getUserName() {
-  try {
-    const email = Session.getActiveUser().getEmail();
-    if (!email) {
-      return "Mail Merge User";
-    }
-    const namePart = email.split('@')[0];
-    return formatNameFromEmail(namePart);
-  } catch (e) {
-    Logger.log("Error getting user name: " + e.message);
-    return "Mail Merge User";
-  }
+  const email = Session.getActiveUser().getEmail();
+  const namePart = email.split('@')[0];
+  return formatNameFromEmail(namePart);
 }
 
 /**
