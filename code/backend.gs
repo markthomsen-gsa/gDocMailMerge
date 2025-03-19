@@ -16,20 +16,88 @@ function include(filename) {
 }
 
 /**
- * Gets the content of the current document.
- * Consolidated function for document text retrieval.
- * @return {string} The document content as raw text.
+ * Gets the content of the current document, extracting only the template content
+ * between the template markers if they exist.
+ * @return {string} The template content as raw text.
  */
 function getDocContent() {
-  return DocumentApp.getActiveDocument().getBody().getText();
+  const doc = DocumentApp.getActiveDocument();
+  const body = doc.getBody();
+  const fullText = body.getText();
+  
+  // Check for template markers
+  const contentStartMarker = "===TEMPLATE CONTENT===";
+  const contentEndMarker = "===TEMPLATE END===";
+  
+  const startIndex = fullText.indexOf(contentStartMarker);
+  const endIndex = fullText.indexOf(contentEndMarker);
+  
+  // If both markers exist, extract only the content between them
+  if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+    // Extract the content between markers (add marker length to get position after marker)
+    const contentStartPos = startIndex + contentStartMarker.length;
+    return fullText.substring(contentStartPos, endIndex).trim();
+  }
+  
+  // Fallback: If markers not found, return the full document content (for backward compatibility)
+  return fullText;
 }
 
 /**
- * Sets document content based on saved text.
- * @param {string} content - Text content to set in the document
+ * Gets the configuration section from the document if it exists
+ * @return {Object} Extracted configuration values or null if not found
+ */
+function getDocConfig() {
+  const doc = DocumentApp.getActiveDocument();
+  const body = doc.getBody();
+  const fullText = body.getText();
+  
+  // Check for config markers
+  const configStartMarker = "===TEMPLATE CONFIG===";
+  const configEndMarker = "===TEMPLATE CONTENT===";
+  
+  const startIndex = fullText.indexOf(configStartMarker);
+  const endIndex = fullText.indexOf(configEndMarker);
+  
+  // If both markers exist, extract the configuration
+  if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+    // Extract the config section
+    const configStartPos = startIndex + configStartMarker.length;
+    const configText = fullText.substring(configStartPos, endIndex).trim();
+    
+    // Parse the configuration
+    const config = {};
+    const lines = configText.split('\n');
+    
+    for (const line of lines) {
+      const colonIndex = line.indexOf(':');
+      if (colonIndex > 0) {
+        const key = line.substring(0, colonIndex).trim();
+        const value = line.substring(colonIndex + 1).trim();
+        
+        // Handle required fields specially
+        if (key === "Required Fields") {
+          config.requiredFields = value.split(',').map(field => field.trim());
+        } else {
+          config[key] = value;
+        }
+      }
+    }
+    
+    return config;
+  }
+  
+  // No configuration section found
+  return null;
+}
+
+/**
+ * Sets document content with proper template boundaries
+ * @param {string} content - The template content to set
+ * @param {Object} config - Optional configuration to include
  * @return {boolean} Success status
  */
-function setDocContent(content) {
+function setDocContent(content, config = null) {
   try {
     const doc = DocumentApp.getActiveDocument();
     const body = doc.getBody();
@@ -37,8 +105,30 @@ function setDocContent(content) {
     // Clear existing content
     body.clear();
     
-    // Set new content
-    body.setText(content);
+    // Add configuration section if provided
+    if (config) {
+      let configText = "===TEMPLATE CONFIG===\n";
+      
+      // Add all configuration properties
+      for (const [key, value] of Object.entries(config)) {
+        // Handle required fields array specially
+        if (key === 'requiredFields' && Array.isArray(value)) {
+          configText += `Required Fields: ${value.join(', ')}\n`;
+        } 
+        // Skip document content itself to avoid recursion
+        else if (key !== 'documentContent') {
+          configText += `${key}: ${value}\n`;
+        }
+      }
+      
+      // Add configuration to document
+      body.appendParagraph(configText);
+    }
+    
+    // Add content section markers and content
+    body.appendParagraph("===TEMPLATE CONTENT===");
+    body.appendParagraph(content);
+    body.appendParagraph("===TEMPLATE END===");
     
     return true;
   } catch (e) {
@@ -862,6 +952,7 @@ function getCurrentSidebarValues() {
 
 /**
  * Saves a configuration with specific values.
+ * Modified to support template boundaries and metadata.
  * @param {string} name - The configuration name.
  * @param {Object} values - The values to save.
  * @return {Object} Result with success flag and message.
@@ -878,7 +969,41 @@ function saveConfigurationWithValues(name, values) {
     
     // Include document content if requested
     if (values.includeDocumentContent) {
-      values.documentContent = getDocContent();
+      // Create a configuration object for the document
+      const docConfig = {
+        Template: name,
+        Version: values.templateVersion || '1.0',
+        Description: values.templateDescription || '',
+        Spreadsheet: values.spreadsheetUrl ? shortenUrl(values.spreadsheetUrl) : '',
+        Sheet: values.sheetName || '',
+        'Email Column': values.emailColumn || '',
+        Subject: values.subjectLine || '',
+        'Required Fields': values.requiredFields ? values.requiredFields.join(', ') : '',
+        'Last Updated': new Date().toLocaleDateString()
+      };
+      
+      // First clear the document and add the config and markers
+      const doc = DocumentApp.getActiveDocument();
+      const body = doc.getBody();
+      body.clear();
+      
+      // Add configuration section
+      let configText = "===TEMPLATE CONFIG===\n";
+      for (const [key, value] of Object.entries(docConfig)) {
+        if (value) configText += `${key}: ${value}\n`;
+      }
+      body.appendParagraph(configText);
+      
+      // Get the original document content
+      const origContent = getOriginalDocContent();
+      
+      // Add content markers and the content
+      body.appendParagraph("===TEMPLATE CONTENT===");
+      body.appendParagraph(origContent || "");
+      body.appendParagraph("===TEMPLATE END===");
+      
+      // Now capture the complete document with markers
+      values.documentContent = DocumentApp.getActiveDocument().getBody().getText();
       values.documentContentTimestamp = new Date().toISOString();
       values.documentName = DocumentApp.getActiveDocument().getName();
     }
@@ -897,7 +1022,67 @@ function saveConfigurationWithValues(name, values) {
 }
 
 /**
- * Loads a configuration.
+ * Gets the original document content before adding template markers.
+ * Used to preserve content when adding configuration.
+ * @return {string} The original document content.
+ */
+function getOriginalDocContent() {
+  try {
+    const doc = DocumentApp.getActiveDocument();
+    const body = doc.getBody().copy();
+    const text = body.getText();
+    
+    // Check if the document already has template markers
+    const contentStartMarker = "===TEMPLATE CONTENT===";
+    const contentEndMarker = "===TEMPLATE END===";
+    
+    const startIndex = text.indexOf(contentStartMarker);
+    const endIndex = text.indexOf(contentEndMarker);
+    
+    // If both markers exist, extract only the content between them
+    if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+      const contentStartPos = startIndex + contentStartMarker.length;
+      return text.substring(contentStartPos, endIndex).trim();
+    }
+    
+    // If no markers, return the full content
+    return text;
+  } catch (e) {
+    Logger.log("Error getting original document content: " + e.message);
+    return "";
+  }
+}
+
+/**
+ * Shortens a URL for display in configuration
+ * @param {string} url - The URL to shorten
+ * @return {string} Shortened URL or original if not recognized
+ */
+function shortenUrl(url) {
+  if (!url) return '';
+  
+  // If it's a Google Sheets URL, shorten it
+  if (url.includes('docs.google.com/spreadsheets')) {
+    const parts = url.split('/');
+    // Get the file name if possible, otherwise just the ID
+    let fileName = url.match(/\/[^\/]+-([^\/]+)\//) || [];
+    if (fileName.length > 1) {
+      return fileName[1] + ' (Google Sheet)';
+    }
+    // Return just the ID portion
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === 'd' && i+1 < parts.length) {
+        return parts[i+1].substring(0, 10) + '... (Google Sheet)';
+      }
+    }
+  }
+  
+  // Otherwise return truncated URL
+  return url.length > 40 ? url.substring(0, 37) + '...' : url;
+}
+
+/**
+ * Modified function to load a configuration and respect template boundaries.
  * @param {string} name - The configuration name.
  * @param {boolean} loadDocumentContent - Whether to load document content.
  * @return {Object} Result with success flag and loaded config.
@@ -918,7 +1103,31 @@ function loadConfiguration(name, loadDocumentContent = false) {
     // Handle document content if present and requested
     let documentContentLoaded = false;
     if (config.documentContent && loadDocumentContent) {
-      documentContentLoaded = setDocContent(config.documentContent);
+      // Check if the saved content has template markers
+      if (config.documentContent.includes("===TEMPLATE CONTENT===") && 
+          config.documentContent.includes("===TEMPLATE END===")) {
+        
+        // Set the document content directly with markers
+        const doc = DocumentApp.getActiveDocument();
+        const body = doc.getBody();
+        body.clear();
+        body.setText(config.documentContent);
+        documentContentLoaded = true;
+      } else {
+        // Legacy content without markers - wrap it with markers
+        documentContentLoaded = setDocContent(config.documentContent, {
+          Template: name,
+          Version: config.templateVersion || '1.0',
+          Description: config.templateDescription || '',
+          Spreadsheet: config.spreadsheetUrl ? shortenUrl(config.spreadsheetUrl) : '',
+          Sheet: config.sheetName || '',
+          'Email Column': config.emailColumn || '',
+          Subject: config.subjectLine || '',
+          'Required Fields': config.requiredFields ? config.requiredFields.join(', ') : '',
+          'Last Updated': new Date().toLocaleDateString()
+        });
+      }
+      
       if (!documentContentLoaded) {
         return { 
           success: false, 

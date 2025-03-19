@@ -406,6 +406,27 @@
             </div>
           </div>
         </div>
+        
+        <div class="setting-item">
+          <div class="setting-input" style="grid-column: 1 / span 2;">
+            <label for="templateDescription">Template Description</label>
+            <input type="text" id="templateDescription" placeholder="Brief description of this template">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-input" style="grid-column: 1 / span 2;">
+            <label for="templateVersion">Template Version</label>
+            <input type="text" id="templateVersion" placeholder="e.g. 1.0" style="width: 100px;">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-input" style="grid-column: 1 / span 2;">
+            <label for="requiredFields">Required Fields (comma-separated)</label>
+            <input type="text" id="requiredFields" placeholder="FirstName, LastName, Email, etc.">
+          </div>
+        </div>
       </div>
       
       <div class="actions">
@@ -541,6 +562,19 @@
       addDetailItem(emailDetails, 'CC Override', config.ccOverride || 'Not set');
       addDetailItem(emailDetails, 'BCC Override', config.bccOverride || 'Not set');
       
+      // Add template metadata if available
+      if (config.templateDescription) {
+        addDetailItem(emailDetails, 'Description', config.templateDescription);
+      }
+      
+      if (config.templateVersion) {
+        addDetailItem(emailDetails, 'Version', config.templateVersion);
+      }
+      
+      if (config.requiredFields && config.requiredFields.length > 0) {
+        addDetailItem(emailDetails, 'Required Fields', config.requiredFields.join(', '));
+      }
+      
       // Populate Document Content details if present
       const docContentDetails = document.getElementById('docContentDetails');
       docContentDetails.innerHTML = '<h5>Document Content</h5>';
@@ -629,6 +663,11 @@
       
       // Set Document Content checkbox
       document.getElementById('saveDocumentContent').checked = Boolean(config.documentContent);
+      
+      // Set template metadata fields
+      document.getElementById('templateDescription').value = config.templateDescription || '';
+      document.getElementById('templateVersion').value = config.templateVersion || '';
+      document.getElementById('requiredFields').value = config.requiredFields ? config.requiredFields.join(', ') : '';
       
       // Switch to Save tab
       switchTab('saveTab');
@@ -826,6 +865,11 @@
       // Document Content setting
       config.includeDocumentContent = document.getElementById('saveDocumentContent').checked;
       
+      // Add template metadata
+      config.templateDescription = document.getElementById('templateDescription').value;
+      config.templateVersion = document.getElementById('templateVersion').value;
+      config.requiredFields = document.getElementById('requiredFields').value.split(',').map(field => field.trim());
+      
       // Check if we need to handle an edit with name change
       let deleteOldConfig = false;
       if (editMode && originalConfigName !== name) {
@@ -901,6 +945,11 @@
       
       // Reset Document Content checkbox
       document.getElementById('saveDocumentContent').checked = false;
+      
+      // Reset template metadata fields
+      document.getElementById('templateDescription').value = '';
+      document.getElementById('templateVersion').value = '';
+      document.getElementById('requiredFields').value = '';
       
       // Reload current values from sidebar (optional)
       loadCurrentValues();
