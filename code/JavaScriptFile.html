@@ -1003,50 +1003,86 @@
     // Show results
     toggleVisibility('mergeResults', true);
   }
-
-  // Function to load sender emails
+  
+  // Function to load sender emails with better error handling
   function loadSenderEmails() {
-    // Show loading notification
-    const loadingNotification = showNotification('Loading sender information...', 'info', 0);
-    
-    google.script.run
-      .withSuccessHandler(function(emails) {
-        // Remove loading notification
-        if (loadingNotification) {
-          loadingNotification.remove();
+  // Show loading notification
+  const loadingNotification = showNotification('Loading sender information...', 'info', 0);
+  
+  google.script.run
+    .withSuccessHandler(function(emails) {
+      // Remove loading notification
+      if (loadingNotification) {
+        loadingNotification.remove();
+      }
+      
+      // Check if we got an error response
+      if (emails && emails.length > 0 && emails[0].error) {
+        // Show permission error but still continue with empty values
+        showNotification('Permission error: ' + emails[0].error, 'warning', config.toastDuration * 2);
+        console.warn('Permission error loading sender info:', emails[0].error);
+      }
+      
+      // Handle the result (even with errors, we'll have at least one email record)
+      handleSenderEmails(emails);
+      
+      // Also use the user's email for test email field if available
+      if (emails && emails.length > 0 && emails[0].email) {
+        const testEmailField = document.getElementById('testEmailAddress');
+        if (testEmailField) {
+          testEmailField.value = emails[0].email || '';
         }
-        
-        // Handle the result
-        handleSenderEmails(emails);
-        
-        // Also use the user's email for test email field
-        if (emails && emails.length > 0) {
-          const testEmailField = document.getElementById('testEmailAddress');
-          if (testEmailField) {
-            testEmailField.value = emails[0].email || '';
-          }
-        }
-      })
-      .withFailureHandler(function(error) {
-        // Remove loading notification
-        if (loadingNotification) {
-          loadingNotification.remove();
-        }
-        
-        // Show error
-        showNotification('Error loading sender information: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
-      })
-      .getAvailableFromAddresses();
-  }
-
-  // Handler for sender emails
+      }
+    })
+    .withFailureHandler(function(error) {
+      // Remove loading notification
+      if (loadingNotification) {
+        loadingNotification.remove();
+      }
+      
+      // Log the error for debugging
+      console.error('Server error loading sender information:', error);
+      
+      // Show error with more helpful explanation
+      showNotification(
+        'Error loading sender information. The add-on may need additional permissions.', 
+        'error', 
+        config.toastDuration
+      );
+      
+      // Use fallback values for sender
+      handleSenderEmails([{
+        email: '',
+        name: 'Mail Merge User',
+        isPrimary: true
+      }]);
+    })
+    .getAvailableFromAddresses();
+}
+  
+  // Handler for sender emails with improved error handling
   function handleSenderEmails(emails) {
-    const fromEmailSelect = document.getElementById('fromEmailSelect');
-    if (!fromEmailSelect) return;
+  const fromEmailSelect = document.getElementById('fromEmailSelect');
+  if (!fromEmailSelect) return;
+  
+  // Clear existing options
+  fromEmailSelect.innerHTML = '';
+  
+  // Check if we got any valid emails
+  if (!emails || emails.length === 0 || !emails[0].email) {
+    // Add a placeholder if there's a permission issue or no emails
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Use default sender (permission required)';
+    fromEmailSelect.appendChild(option);
     
-    // Clear existing options
-    fromEmailSelect.innerHTML = '';
-    
+    // Set default sender name with a helpful placeholder
+    const fromNameField = document.getElementById('fromName');
+    if (fromNameField) {
+      fromNameField.value = 'Mail Merge Sender';
+      fromNameField.placeholder = 'Enter your name here';
+    }
+  } else {
     // Add options for each email
     emails.forEach(email => {
       const option = document.createElement('option');
@@ -1057,7 +1093,7 @@
       fromEmailSelect.appendChild(option);
     });
     
-    // Set default sender name
+    // Set default sender name if available
     if (emails.length > 0 && emails[0].name) {
       const fromNameField = document.getElementById('fromName');
       if (fromNameField) {
@@ -1066,10 +1102,11 @@
     } else {
       getUserName();
     }
-    
-    // Update summary
-    updateSummary();
   }
+  
+  // Update summary
+  updateSummary();
+}
 
   // Function to get user name
   function getUserName() {
