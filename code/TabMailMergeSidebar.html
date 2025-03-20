@@ -548,82 +548,87 @@
 </div>
 
 
-  <!-- Data Source Section -->
+<!-- Data Source Section -->
   <div id="dataSource" class="section active">
     <div class="section-indicator">
       <div class="section-indicator-bar" style="height: 80px;"></div>
     </div>
-    
-    <div class="section-header" onclick="toggleSection('dataSource')" aria-expanded="true" aria-controls="dataSourceContent">
-      <div class="section-title">
-        <span class="section-number">01</span>
-        Data Source
-      </div>
-      <div class="section-toggle">
-        <div class="toggle-indicator" aria-hidden="true">−</div>
-        <div class="toggle-bar"></div>
-      </div>
+  
+  <div class="section-header" onclick="toggleSection('dataSource')" aria-expanded="true" aria-controls="dataSourceContent">
+    <div class="section-title">
+      <span class="section-number">01</span>
+      Data Source
     </div>
-    
-    <div id="dataSourceContent" class="section-content">
-      <div class="form-group">
-        <label for="spreadsheetUrl">Spreadsheet URL or ID <span class="tooltip help-icon"><span class="tooltip-text">Paste your Google Sheets URL or ID to connect your data source</span></span></label>
-        <input type="text" id="spreadsheetUrl" placeholder="Paste spreadsheet URL or ID" aria-label="Spreadsheet URL or ID">
-      </div>
-      
-      <div class="form-group">
-        <button id="validateBtn" onclick="validateSpreadsheet()" style="display: flex; align-items: center; justify-content: center;" aria-label="Validate spreadsheet">
-          <span style="margin-right: 6px;">✓</span> Validate
-        </button>
-      </div>
-      
-      <div id="loadSheetsGroup" class="form-group hidden">
-        <button id="loadSheetsBtn" onclick="loadSheetNames()" style="display: flex; align-items: center; justify-content: center;" aria-label="Load sheets">
-          <span style="margin-right: 6px;">↓</span> Load Sheets
-        </button>
-      </div>
-      
-      <div id="sheetSelectGroup" class="form-group hidden">
-        <label for="sheetSelect">Select Sheet</label>
-        <select id="sheetSelect" aria-label="Select Sheet">
-          <option value="">Select a sheet...</option>
-        </select>
-      </div>
-      
-      <div id="loadColumnsGroup" class="form-group hidden">
-        <button id="loadColumnsBtn" onclick="loadSheetColumns()" style="display: flex; align-items: center; justify-content: center;" aria-label="Load columns">
-          <span style="margin-right: 6px;">↓</span> Load Columns
-        </button>
-      </div>
-      
-      <div id="emailColumnGroup" class="form-group hidden">
-        <label for="emailColumnSelect">Recipients Column <span class="tooltip help-icon"><span class="tooltip-text">Select the column containing email addresses for the main recipients</span></span></label>
-        <select id="emailColumnSelect" onchange="updateSummary()" aria-label="Recipients Column">
-          <option value="">Select recipients column...</option>
-        </select>
-      </div>
-      
-      <div class="form-group hidden" id="ccBccToggleGroup">
-        <a href="#" id="showCcBccLink" onclick="toggleCcBcc()" class="small-link">
-          + Show CC/BCC options
-        </a>
-      </div>
-      
-      <div id="ccColumnGroup" class="form-group hidden">
-        <label for="ccColumnSelect">CC Recipients <span class="tooltip help-icon"><span class="tooltip-text">Select a column containing CC email addresses (optional)</span></span></label>
-        <select id="ccColumnSelect" onchange="updateSummary()" aria-label="CC Recipients Column">
-          <option value="">None (Optional)</option>
-        </select>
-      </div>
-      
-      <div id="bccColumnGroup" class="form-group hidden">
-        <label for="bccColumnSelect">BCC Recipients <span class="tooltip help-icon"><span class="tooltip-text">Select a column containing BCC email addresses (optional)</span></span></label>
-        <select id="bccColumnSelect" onchange="updateSummary()" aria-label="BCC Recipients Column">
-          <option value="">None (Optional)</option>
-        </select>
-      </div>
+    <div class="section-toggle">
+      <div class="toggle-indicator" aria-hidden="true">−</div>
+      <div class="toggle-bar"></div>
     </div>
   </div>
+  
+  <div id="dataSourceContent" class="section-content">
+    <div class="form-group">
+      <label for="spreadsheetUrl">Spreadsheet URL or ID <span class="tooltip help-icon"><span class="tooltip-text">Paste your Google Sheets URL or ID to connect your data source</span></span></label>
+      <div style="display: flex;">
+        <input type="text" id="spreadsheetUrl" placeholder="Paste spreadsheet URL or ID" aria-label="Spreadsheet URL or ID" style="flex: 1;">
+        <button id="openSpreadsheetLink" onclick="openSpreadsheetInBrowser()" style="width: auto; margin-left: 4px; flex: 0 0 auto; padding: 6px;" class="secondary hidden" aria-label="Open spreadsheet">
+          <span style="font-size: 14px;">↗</span>
+        </button>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <button id="validateBtn" onclick="validateSpreadsheet()" style="display: flex; align-items: center; justify-content: center;" aria-label="Validate spreadsheet">
+        <span style="margin-right: 6px;">✓</span> Validate
+      </button>
+    </div>
+    
+    <div id="loadSheetsGroup" class="form-group hidden">
+      <button id="loadSheetsBtn" onclick="loadSheetNames()" style="display: flex; align-items: center; justify-content: center;" aria-label="Load sheets">
+        <span style="margin-right: 6px;">↓</span> Load Sheets
+      </button>
+    </div>
+    
+    <div id="sheetSelectGroup" class="form-group hidden">
+      <label for="sheetSelect">Select Sheet</label>
+      <select id="sheetSelect" aria-label="Select Sheet">
+        <option value="">Select a sheet...</option>
+      </select>
+    </div>
+    
+    <div id="loadColumnsGroup" class="form-group hidden">
+      <button id="loadColumnsBtn" onclick="loadSheetColumns()" style="display: flex; align-items: center; justify-content: center;" aria-label="Load columns">
+        <span style="margin-right: 6px;">↓</span> Load Columns
+      </button>
+    </div>
+    
+    <div id="emailColumnGroup" class="form-group hidden">
+      <label for="emailColumnSelect">Recipients Column <span class="tooltip help-icon"><span class="tooltip-text">Select the column containing email addresses for the main recipients</span></span></label>
+      <select id="emailColumnSelect" onchange="updateSummary()" aria-label="Recipients Column">
+        <option value="">Select recipients column...</option>
+      </select>
+    </div>
+    
+    <div class="form-group hidden" id="ccBccToggleGroup">
+      <a href="#" id="showCcBccLink" onclick="toggleCcBcc()" class="small-link">
+        + Show CC/BCC options
+      </a>
+    </div>
+    
+    <div id="ccColumnGroup" class="form-group hidden">
+      <label for="ccColumnSelect">CC Recipients <span class="tooltip help-icon"><span class="tooltip-text">Select a column containing CC email addresses (optional)</span></span></label>
+      <select id="ccColumnSelect" onchange="updateSummary()" aria-label="CC Recipients Column">
+        <option value="">None (Optional)</option>
+      </select>
+    </div>
+    
+    <div id="bccColumnGroup" class="form-group hidden">
+      <label for="bccColumnSelect">BCC Recipients <span class="tooltip help-icon"><span class="tooltip-text">Select a column containing BCC email addresses (optional)</span></span></label>
+      <select id="bccColumnSelect" onchange="updateSummary()" aria-label="BCC Recipients Column">
+        <option value="">None (Optional)</option>
+      </select>
+    </div>
+  </div>
+</div>
   
   <!-- Email Subject Line Section -->
   <div id="template" class="section">

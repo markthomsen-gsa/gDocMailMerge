@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      font-size: 13px;
+      color: #202124;
+    }
+    
+    h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 16px;
+      font-weight: normal;
+      color: #202124;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #5f6368;
+    }
+    
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    
+    .template-details {
+      padding: 10px;
+      background-color: #f8f9fa;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      height: 100px;
+      overflow-y: auto;
+    }
+    
+    .detail-row {
+      display: flex;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    
+    .detail-label {
+      flex: 0 0 100px;
+      color: #5f6368;
+    }
+    
+    .detail-value {
+      flex: 1;
+    }
+    
+    .warning {
+      background-color: #fef7e0;
+      border-left: 3px solid #f9ab00;
+      color: #994c00;
+      padding: 8px;
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+    
+    .buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    
+    .primary {
+      background-color: #4285f4;
+      color: white;
+    }
+    
+    .secondary {
+      background-color: #f1f3f4;
+      color: #202124;
+      border: 1px solid #dadce0;
+    }
+    
+    #loadingIndicator {
+      display: none;
+      text-align: center;
+      margin: 20px 0;
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(66, 133, 244, 0.2);
+      border-radius: 50%;
+      border-top-color: #4285f4;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h3>Load Template to Document</h3>
+  
+  <div class="form-group">
+    <label for="templateSelect">Select Template</label>
+    <select id="templateSelect" onchange="showTemplateDetails()">
+      <option value="">Choose a template...</option>
+    </select>
+  </div>
+  
+  <div id="templateDetails" class="template-details" style="display: none;">
+    <!-- Template details will be populated here -->
+  </div>
+  
+  <div id="warningBox" class="warning" style="display: none;">
+    <strong>Warning:</strong> Loading a template will replace the current document content. 
+    Make sure to save any important content before proceeding.
+  </div>
+  
+  <div id="loadingIndicator">
+    <div class="spinner"></div> Loading template...
+  </div>
+  
+  <div class="buttons">
+    <button class="secondary" onclick="google.script.host.close()">Cancel</button>
+    <button id="loadBtn" class="primary" onclick="loadSelectedTemplate()" disabled>Load Template</button>
+  </div>
+  
+  <script>
+    // On load, fetch available templates
+    document.addEventListener('DOMContentLoaded', loadTemplateList);
+    
+    function loadTemplateList() {
+      google.script.run
+        .withSuccessHandler(populateTemplateList)
+        .withFailureHandler(handleError)
+        .getAvailableTemplates();
+        
+      // Check if document has content to show warning
+      google.script.run
+        .withSuccessHandler(function(hasContent) {
+          document.getElementById('warningBox').style.display = hasContent ? 'block' : 'none';
+        })
+        .documentHasContent();
+    }
+    
+    function populateTemplateList(templates) {
+      const select = document.getElementById('templateSelect');
+      select.innerHTML = '<option value="">Choose a template...</option>';
+      
+      // Sort templates alphabetically
+      const templateNames = Object.keys(templates).sort();
+      
+      if (templateNames.length === 0) {
+        select.innerHTML = '<option value="">No templates available</option>';
+        return;
+      }
+      
+      for (const name of templateNames) {
+        const template = templates[name];
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+      }
+      
+      // Store templates for later use
+      window.templateData = templates;
+    }
+    
+    function showTemplateDetails() {
+      const templateName = document.getElementById('templateSelect').value;
+      const detailsDiv = document.getElementById('templateDetails');
+      const loadBtn = document.getElementById('loadBtn');
+      
+      if (!templateName) {
+        detailsDiv.style.display = 'none';
+        loadBtn.disabled = true;
+        return;
+      }
+      
+      loadBtn.disabled = false;
+      detailsDiv.style.display = 'block';
+      
+      const template = window.templateData[templateName];
+      if (!template) {
+        detailsDiv.innerHTML = '<p>Template details not available</p>';
+        return;
+      }
+      
+      let detailsHtml = '';
+      
+      // Add description if available
+      if (template.description) {
+        detailsHtml += `
+          <div class="detail-row">
+            <div class="detail-label">Description:</div>
+            <div class="detail-value">${template.description}</div>
+          </div>
+        `;
+      }
+      
+      // Add last saved date if available
+      if (template.lastSaved) {
+        const lastSavedDate = new Date(template.lastSaved).toLocaleString();
+        detailsHtml += `
+          <div class="detail-row">
+            <div class="detail-label">Last Saved:</div>
+            <div class="detail-value">${lastSavedDate}</div>
+          </div>
+        `;
+      }
+      
+      // Add template size if available
+      if (template.size) {
+        detailsHtml += `
+          <div class="detail-row">
+            <div class="detail-label">Size:</div>
+            <div class="detail-value">${template.size}</div>
+          </div>
+        `;
+      }
+      
+      // If no details were added, show a message
+      if (!detailsHtml) {
+        detailsHtml = '<p>No additional details available</p>';
+      }
+      
+      detailsDiv.innerHTML = detailsHtml;
+    }
+    
+    function loadSelectedTemplate() {
+      const templateName = document.getElementById('templateSelect').value;
+      if (!templateName) return;
+      
+      // Show loading indicator
+      document.getElementById('loadingIndicator').style.display = 'block';
+      document.getElementById('loadBtn').disabled = true;
+      
+      google.script.run
+        .withSuccessHandler(handleLoadSuccess)
+        .withFailureHandler(handleLoadError)
+        .loadTemplateToDocument(templateName);
+    }
+    
+    function handleLoadSuccess(result) {
+      // Hide loading indicator
+      document.getElementById('loadingIndicator').style.display = 'none';
+      
+      if (result.success) {
+        alert(result.message);
+        google.script.host.close();
+      } else {
+        document.getElementById('loadBtn').disabled = false;
+        alert('Error: ' + result.message);
+      }
+    }
+    
+    function handleLoadError(error) {
+      // Hide loading indicator
+      document.getElementById('loadingIndicator').style.display = 'none';
+      document.getElementById('loadBtn').disabled = false;
+      
+      alert('Error loading template: ' + error.message);
+    }
+    
+    function handleError(error) {
+      alert('Error: ' + error.message);
+    }
+  </script>
+</body>
+</html>

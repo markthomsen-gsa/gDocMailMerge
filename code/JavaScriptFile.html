@@ -3,6 +3,7 @@
   let spreadsheetData = {
     id: '',
     name: '',
+    url: '', // Added url property for direct access
     sheetName: '',
     columnHeaders: [],
     emailColumn: '',
@@ -277,71 +278,265 @@
     
     if (isValidUrl || isValidId) {
       // URL/ID looks valid - enable validate button
-      document.getElementById('validateBtn').disabled = false;
+      document.getElementById('validateDataSourceBtn').disabled = false;
       // No auto-validation
     } else {
       // URL/ID doesn't look valid
-      document.getElementById('validateBtn').disabled = false;
+      document.getElementById('validateDataSourceBtn').disabled = false;
     }
   }
 
-  // Function to validate spreadsheet
-  function validateSpreadsheet() {
+  /**
+   * Single-step validation function to handle all data source validation tasks.
+   * This implements the new simplified validation process.
+   */
+  function validateDataSource() {
+    // Get all relevant field values
     const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
+    const sheetName = document.getElementById('sheetSelect').value.trim();
+    const emailColumn = document.getElementById('emailColumnSelect').value.trim();
+    
+    // Make sure we have at least a spreadsheet URL
     if (!spreadsheetUrl) {
       showNotification('Please enter a spreadsheet URL or ID', 'error', config.toastDuration);
       return;
     }
     
     // Show loading state
-    const validateBtn = document.getElementById('validateBtn');
+    const validateBtn = document.getElementById('validateDataSourceBtn');
     validateBtn.disabled = true;
     
-    // Add spinner next to button text without changing button size
-    const btnText = validateBtn.textContent || validateBtn.innerText;
-    validateBtn.innerHTML = `<span class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span> ${btnText}`;
+    // Change button text to show we're processing
+    const originalBtnText = validateBtn.innerHTML;
+    validateBtn.innerHTML = `<span class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span> Validating...`;
     
-    // Show top notification
-    const loadingNotification = showNotification('Validating spreadsheet...', 'info', 0);
+    // Show loading notification
+    const loadingNotification = showNotification('Validating data source...', 'info', 0);
     
-    // Hide related sections
-    toggleVisibility('loadSheetsGroup', false);
-    toggleVisibility('sheetSelectGroup', false);
-    toggleVisibility('loadColumnsGroup', false);
-    toggleVisibility('emailColumnGroup', false);
-    toggleVisibility('ccColumnGroup', false);
-    toggleVisibility('bccColumnGroup', false);
-    toggleVisibility('ccBccToggleGroup', false);
+    // Hide validation success indicators if present
+    toggleVisibility('validationSuccessIndicator', false);
     
-    // Call the server function
+    // Call the server-side validation function
     google.script.run
       .withSuccessHandler(function(result) {
         // Restore button state
-        validateBtn.innerHTML = btnText;
+        validateBtn.innerHTML = originalBtnText;
         validateBtn.disabled = false;
         
-        // Remove notification
+        // Remove loading notification
         if (loadingNotification) {
           loadingNotification.remove();
         }
         
-        // Handle the result
-        handleSpreadsheetValidation(result);
+        // Update button text for re-validation
+        validateBtn.innerHTML = `<span style="margin-right: 6px;">✓</span> Re-validate Data Source`;
+        
+        // Handle successful validation
+        handleDataSourceValidation(result);
       })
       .withFailureHandler(function(error) {
         // Restore button state
-        validateBtn.innerHTML = btnText;
+        validateBtn.innerHTML = originalBtnText;
         validateBtn.disabled = false;
         
-        // Remove notification
+        // Remove loading notification
         if (loadingNotification) {
           loadingNotification.remove();
         }
         
-        // Handle the error
-        showNotification('Error: ' + (error.message || 'Could not validate spreadsheet'), 'error', config.toastDuration);
+        // Show error
+        showNotification('Error validating data source: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
       })
-      .validateSpreadsheet(spreadsheetUrl);
+      .validateDataSource(spreadsheetUrl, sheetName, emailColumn);
+  }
+
+  /**
+   * Handler for data source validation results.
+   * @param {Object} result - The validation results
+   */
+  function handleDataSourceValidation(result) {
+    if (!result.success) {
+      showNotification(result.message || 'Error validating data source', 'error', config.toastDuration);
+      return;
+    }
+    
+    // Successful validation
+    showNotification('Data source validated successfully!', 'success', config.toastDuration);
+    
+    // Store the spreadsheet data
+    if (result.spreadsheet && result.spreadsheet.valid) {
+      spreadsheetData.id = result.spreadsheet.id;
+      spreadsheetData.name = result.spreadsheet.name;
+      spreadsheetData.url = result.spreadsheet.url;
+    }
+    
+    // Store sheet data
+    if (result.sheet && result.sheet.valid) {
+      spreadsheetData.sheetName = result.sheet.name;
+      
+      // Update summary
+      document.getElementById('summarySheet').textContent = result.sheet.name;
+      
+      // Update validation summary
+      if (document.getElementById('validationSheet')) {
+        document.getElementById('validationSheet').textContent = result.sheet.name;
+      }
+    }
+    
+    // Populate sheet selector if needed
+    if (result.sheet && result.sheet.valid && result.headers) {
+      // If the sheet wasn't previously selected, populate the dropdown and select it
+      const sheetSelect = document.getElementById('sheetSelect');
+      if (!sheetSelect.value) {
+        // Clear and create options
+        sheetSelect.innerHTML = '<option value="">Select a sheet...</option>';
+        
+        // Add all available sheets
+        if (result.availableSheets && result.availableSheets.length > 0) {
+          result.availableSheets.forEach(sheet => {
+            const option = document.createElement('option');
+            option.value = sheet;
+            option.textContent = sheet;
+            sheetSelect.appendChild(option);
+          });
+        } else {
+          // Just add the validated sheet
+          const option = document.createElement('option');
+          option.value = result.sheet.name;
+          option.textContent = result.sheet.name;
+          sheetSelect.appendChild(option);
+        }
+        
+        // Select the validated sheet
+        sheetSelect.value = result.sheet.name;
+      }
+      
+      // Update column headers and populate the email column dropdown
+      spreadsheetData.columnHeaders = result.headers;
+      
+      // Populate or update email column dropdown
+      const emailColumnSelect = document.getElementById('emailColumnSelect');
+      emailColumnSelect.innerHTML = '<option value="">Select recipients column...</option>';
+      
+      result.headers.forEach(header => {
+        const option = document.createElement('option');
+        option.value = header;
+        option.textContent = header;
+        emailColumnSelect.appendChild(option);
+      });
+      
+      // Set the email column if it was validated
+      if (result.emailColumn && result.emailColumn.valid) {
+        emailColumnSelect.value = result.emailColumn.name;
+        
+        // Store the email column
+        spreadsheetData.emailColumn = result.emailColumn.name;
+        
+        // Update summary
+        document.getElementById('summaryEmailColumn').textContent = result.emailColumn.name;
+      }
+      
+      // Populate CC/BCC column dropdowns as well
+      populateCcBccDropdowns(result.headers);
+      
+      // Update placeholders list
+      updatePlaceholdersList();
+      
+      // Store recipient count
+      if (result.recipientCount !== undefined) {
+        spreadsheetData.recipientCount = result.recipientCount;
+        document.getElementById('summaryRecipientCount').textContent = 
+          result.recipientCount ? result.recipientCount : '-';
+        
+        // Update validation summary
+        if (document.getElementById('validationRecipientCount')) {
+          document.getElementById('validationRecipientCount').textContent = 
+            result.recipientCount ? result.recipientCount : '-';
+        }
+        
+        // Update quota display
+        updateQuotaDisplay();
+      }
+    }
+    
+    // Show validation success indicator
+    toggleVisibility('validationSuccessIndicator', true);
+    
+    // Show all necessary UI elements
+    toggleVisibility('sheetSelectGroup', true);
+    toggleVisibility('emailColumnGroup', true);
+    toggleVisibility('ccBccToggleGroup', true);
+    
+    // Enable the Send Emails button
+    const executeBtn = document.getElementById('executeBtn');
+    if (executeBtn) {
+      executeBtn.disabled = false;
+    }
+    
+    // Show direct link to open spreadsheet
+    toggleVisibility('openSpreadsheetLink', true);
+  }
+
+  /**
+   * Populate CC/BCC dropdowns with available headers
+   * @param {string[]} headers - The column headers
+   */
+  function populateCcBccDropdowns(headers) {
+    // CC Column dropdown
+    const ccColumnSelect = document.getElementById('ccColumnSelect');
+    ccColumnSelect.innerHTML = '<option value="">None (Optional)</option>';
+    
+    // BCC Column dropdown
+    const bccColumnSelect = document.getElementById('bccColumnSelect');
+    bccColumnSelect.innerHTML = '<option value="">None (Optional)</option>';
+    
+    // Add options for each header
+    headers.forEach(header => {
+      // Add to CC dropdown
+      const ccOption = document.createElement('option');
+      ccOption.value = header;
+      ccOption.textContent = header;
+      ccColumnSelect.appendChild(ccOption);
+      
+      // Add to BCC dropdown
+      const bccOption = document.createElement('option');
+      bccOption.value = header;
+      bccOption.textContent = header;
+      bccColumnSelect.appendChild(bccOption);
+    });
+    
+    // If we have stored values for CC/BCC, set them
+    if (spreadsheetData.ccColumn) {
+      ccColumnSelect.value = spreadsheetData.ccColumn;
+    }
+    
+    if (spreadsheetData.bccColumn) {
+      bccColumnSelect.value = spreadsheetData.bccColumn;
+    }
+  }
+
+  /**
+   * Opens the spreadsheet in a new browser tab
+   */
+  function openSpreadsheetInBrowser() {
+    if (!spreadsheetData.url) {
+      showNotification('Spreadsheet URL not available', 'error', config.toastDuration);
+      return;
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success && result.url) {
+          // Open the URL in a new tab
+          window.open(result.url, '_blank');
+        } else {
+          showNotification('Error opening spreadsheet', 'error', config.toastDuration);
+        }
+      })
+      .withFailureHandler(function(error) {
+        showNotification('Error: ' + (error.message || 'Could not open spreadsheet'), 'error', config.toastDuration);
+      })
+      .openSpreadsheet(spreadsheetData.url);
   }
 
   // Helper function to show a notification
@@ -395,6 +590,13 @@
     }
     
     return notificationDiv;
+  }
+
+  // Keeping these functions for backward compatibility
+  // Function to validate spreadsheet
+  function validateSpreadsheet() {
+    // In our new flow, we'll just call validateDataSource instead
+    validateDataSource();
   }
 
   // Handler for successful spreadsheet validation
@@ -1351,14 +1553,13 @@ function updateUIFromConfig(config) {
   // Set values in UI fields with proper timing for async operations
   if (config.spreadsheetUrl) {
     document.getElementById('spreadsheetUrl').value = config.spreadsheetUrl;
-    validateSpreadsheet();
+    validateDataSource(); // Now using our single-step validation
   }
   
   // We'll use setTimeout to ensure the spreadsheet validation completes
   setTimeout(function() {
     if (config.sheetName) {
       selectOptionByValue(document.getElementById('sheetSelect'), config.sheetName);
-      loadSheetColumns();
       
       setTimeout(function() {
         if (config.emailColumn) {
@@ -1421,18 +1622,33 @@ function clearAllFields() {
     document.getElementById('testEmailAddress').value = '';
     
     // Hide conditional sections
-    toggleVisibility('loadSheetsGroup', false);
     toggleVisibility('sheetSelectGroup', false);
-    toggleVisibility('loadColumnsGroup', false);
     toggleVisibility('emailColumnGroup', false);
     toggleVisibility('ccColumnGroup', false);
     toggleVisibility('bccColumnGroup', false);
+    toggleVisibility('ccBccToggleGroup', false);
+    toggleVisibility('validationSuccessIndicator', false);
+    toggleVisibility('openSpreadsheetLink', false);
     
     // Hide active config indicator
     document.getElementById('activeConfigIndicator').classList.add('hidden');
     
     // Reset dropdown
     document.getElementById('configSelect').value = '';
+    
+    // Reset data
+    spreadsheetData = {
+      id: '',
+      name: '',
+      url: '',
+      sheetName: '',
+      columnHeaders: [],
+      emailColumn: '',
+      ccColumn: '',
+      bccColumn: '',
+      validationResults: null,
+      recipientCount: 0
+    };
     
     // Update UI
     updateCharCounter();
@@ -1507,6 +1723,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListener('fromName', 'input', updateSummary);
     setupEventListener('emailColumnSelect', 'change', updateSummary);
     
+    // Add listener for spreadsheet URL to enable real-time validation feedback
+    setupEventListener('spreadsheetUrl', 'input', validateSpreadsheetRealtime);
+    
     // Initialize character counter
     updateCharCounter();
     
@@ -1532,16 +1751,4 @@ document.addEventListener('DOMContentLoaded', function() {
     alert('There was an error initializing the UI. Please reload the page.');
   }
 });
-  // Check when window regains focus (likely coming back from dialog)
-  window.addEventListener('focus', function() {
-    google.script.run
-      .withSuccessHandler(function(needsRefresh) {
-        if (needsRefresh) {
-          console.log('Configurations updated, refreshing list...');
-          loadConfigurationList();
-        }
-      })
-      .checkConfigurationsNeedRefresh();
-  });
-
 </script>
