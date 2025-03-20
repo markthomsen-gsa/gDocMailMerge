@@ -284,7 +284,7 @@ function saveTemplateToStorage() {
     // Prepare template storage
     const templateName = config["Template Name"];
     const docProperties = PropertiesService.getDocumentProperties();
-    const templatesJson = docProperties.getProperty('mailMergeTemplates') || '{}';
+    const templatesJson = docProperties.getProperty('mailMergeConfigs') || '{}';
     const templates = JSON.parse(templatesJson);
     
     // Check if template already exists and confirm overwrite
@@ -308,7 +308,7 @@ function saveTemplateToStorage() {
     templates[templateName] = config;
     
     // Save back to document properties
-    docProperties.setProperty('mailMergeTemplates', JSON.stringify(templates));
+    docProperties.setProperty('mailMergeConfigs', JSON.stringify(templates));
     
     // Set flag to refresh configurations when returning to sidebar
     PropertiesService.getUserProperties().setProperty('configurationUpdated', 'true');

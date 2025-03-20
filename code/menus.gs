@@ -13,12 +13,12 @@ function onOpen() {
         // Template Management
         .addItem('📝 Create New Template', 'createNewTemplate')
         .addItem('📂 Load Template to Document', 'showLoadTemplateDialog')
-        .addItem('💾 Save Template to Storage', 'saveTemplateFromDocument')
+        .addItem('💾 Save Template to Storage', 'saveTemplateAndShowResult')
         .addSeparator()
         
         // Testing & Utilities
         .addItem('✉️ Send Test Email', 'showTestEmailDialog')
-        .addItem('📤 Backup Templates to Email', 'backupTemplatesToEmail')
+        .addItem('📤 Backup Templates to Email', 'backupTemplatesToEmailAndShowResult')
         .addSeparator()
         
         // Diagnostics
@@ -33,8 +33,7 @@ function onOpen() {
             .addItem('📊 Show Storage Usage', 'showStorageUsage')
         )
         .addToUi();
-  }
-  
+}
   /**
    * Shows a simple dialog with storage usage information
    */
