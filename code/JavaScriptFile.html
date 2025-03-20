@@ -278,11 +278,11 @@
     
     if (isValidUrl || isValidId) {
       // URL/ID looks valid - enable validate button
-      document.getElementById('validateDataSourceBtn').disabled = false;
+      document.getElementById('validateBtn').disabled = false;
       // No auto-validation
     } else {
       // URL/ID doesn't look valid
-      document.getElementById('validateDataSourceBtn').disabled = false;
+      document.getElementById('validateBtn').disabled = false;
     }
   }
 
@@ -592,11 +592,73 @@
     return notificationDiv;
   }
 
-  // Keeping these functions for backward compatibility
   // Function to validate spreadsheet
   function validateSpreadsheet() {
-    // In our new flow, we'll just call validateDataSource instead
-    validateDataSource();
+    const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
+    if (!spreadsheetUrl) {
+      showNotification('Please enter a spreadsheet URL or ID', 'error', config.toastDuration);
+      return;
+    }
+    
+    // Show loading state
+    const validateBtn = document.getElementById('validateBtn');
+    validateBtn.disabled = true;
+    
+    // Change button text to show we're processing
+    const originalBtnText = validateBtn.innerHTML;
+    validateBtn.innerHTML = `<span class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span> Validating...`;
+    
+    // Show loading notification
+    const loadingNotification = showNotification('Validating spreadsheet...', 'info', 0);
+    
+    // Call the server-side validation function
+    google.script.run
+      .withSuccessHandler(function(result) {
+        // Restore button state
+        validateBtn.innerHTML = originalBtnText;
+        validateBtn.disabled = false;
+        
+        // Remove loading notification
+        if (loadingNotification) {
+          loadingNotification.remove();
+        }
+        
+        // Handle successful validation
+        if (result.success) {
+          // Store the spreadsheet data
+          spreadsheetData.id = result.id;
+          spreadsheetData.name = result.name;
+          spreadsheetData.url = spreadsheetUrl;
+          
+          // Show notification for successful validation
+          showNotification('Spreadsheet successfully validated', 'success', config.toastDuration);
+          
+          // Show the Load Sheets button and spreadsheet link
+          toggleVisibility('loadSheetsGroup', true);
+          toggleVisibility('openSpreadsheetLink', true);
+          
+          // Apply pending configuration if this is after loading a config
+          if (window.pendingConfiguration && window.pendingConfiguration.sheetName) {
+            showNotification('Continue by clicking "Load Sheets"', 'info', config.toastDuration);
+          }
+        } else {
+          showNotification(result.message || 'Error validating spreadsheet', 'error', config.toastDuration);
+        }
+      })
+      .withFailureHandler(function(error) {
+        // Restore button state
+        validateBtn.innerHTML = originalBtnText;
+        validateBtn.disabled = false;
+        
+        // Remove loading notification
+        if (loadingNotification) {
+          loadingNotification.remove();
+        }
+        
+        // Show error
+        showNotification('Error validating spreadsheet: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
+      })
+      .validateSpreadsheet(spreadsheetUrl);
   }
 
   // Handler for successful spreadsheet validation
@@ -679,6 +741,13 @@
     // Show the sheet select group
     toggleVisibility('sheetSelectGroup', true);
     
+    // Apply pending configuration if available
+    if (window.pendingConfiguration && window.pendingConfiguration.sheetName) {
+      selectOptionByValue(sheetSelect, window.pendingConfiguration.sheetName);
+      showNotification('Sheet selected. Click "Load Columns" to continue.', 'info', config.toastDuration);
+      toggleVisibility('loadColumnsGroup', true);
+    }
+    
     // Show the Load Columns button after sheet selection
     document.getElementById('sheetSelect').addEventListener('change', function() {
       const selectedSheet = this.value;
@@ -700,7 +769,7 @@
     showNotification('Sheets loaded successfully', 'success', config.toastDuration);
   }
 
-  // Function to load sheet columns - now called manually via button click
+  // Function to load sheet columns
   function loadSheetColumns() {
     const sheetName = document.getElementById('sheetSelect').value;
     if (!sheetName) {
@@ -722,6 +791,7 @@
     toggleVisibility('ccColumnGroup', false);
     toggleVisibility('bccColumnGroup', false);
     toggleVisibility('ccBccToggleGroup', false);
+    toggleVisibility('validationStatusGroup', false);
     
     // Call the server function
     google.script.run
@@ -752,10 +822,48 @@
           
         // Update quota display with new recipient count
         updateQuotaDisplay();
-          
-        // Add recipient count toast notification
+        
+        // Update validation status if we have a recipient count
         if (result.recipientCount > 0) {
+          document.getElementById('validationSheet').textContent = sheetName;
+          document.getElementById('validationRecipientCount').textContent = result.recipientCount;
+          toggleVisibility('validationStatusGroup', true);
+          
+          // Add recipient count toast notification
           showNotification(`Found ${result.recipientCount} potential recipients`, 'success', config.toastDuration);
+        }
+        
+        // Apply pending configuration if available
+        if (window.pendingConfiguration && window.pendingConfiguration.emailColumn) {
+          // Set the email column dropdown
+          selectOptionByValue(document.getElementById('emailColumnSelect'), window.pendingConfiguration.emailColumn);
+          
+          // Update the email column and trigger recipient count update
+          spreadsheetData.emailColumn = window.pendingConfiguration.emailColumn;
+          updateRecipientCount();
+          
+          // Show CC/BCC options if needed
+          if (window.pendingConfiguration.ccColumn || window.pendingConfiguration.bccColumn) {
+            if (document.getElementById('ccColumnGroup').classList.contains('hidden')) {
+              toggleCcBcc();
+            }
+            
+            // Set CC column if specified
+            if (window.pendingConfiguration.ccColumn) {
+              selectOptionByValue(document.getElementById('ccColumnSelect'), window.pendingConfiguration.ccColumn);
+            }
+            
+            // Set BCC column if specified
+            if (window.pendingConfiguration.bccColumn) {
+              selectOptionByValue(document.getElementById('bccColumnSelect'), window.pendingConfiguration.bccColumn);
+            }
+          }
+          
+          // Clear the pending configuration since we've applied it
+          window.pendingConfiguration = null;
+          
+          // Show a message that setup is complete
+          showNotification('Configuration setup complete. You can now send emails.', 'success', config.toastDuration);
         }
       })
       .withFailureHandler(function(error) {
@@ -1548,67 +1656,72 @@ function loadConfigWithoutContent(configName) {
     .loadConfiguration(configName, false); // false = don't load document content
 }
 
-// Helper function to update UI elements with configuration values
+// Function to update UI from configuration
 function updateUIFromConfig(config) {
-  // Set values in UI fields with proper timing for async operations
+  // Log the config for debugging
+  console.log('Updating UI with config:', config);
+  
+  // Set values in UI fields without attempting validation
   if (config.spreadsheetUrl) {
     document.getElementById('spreadsheetUrl').value = config.spreadsheetUrl;
-    validateDataSource(); // Now using our single-step validation
   }
   
-  // We'll use setTimeout to ensure the spreadsheet validation completes
-  setTimeout(function() {
-    if (config.sheetName) {
-      selectOptionByValue(document.getElementById('sheetSelect'), config.sheetName);
-      
-      setTimeout(function() {
-        if (config.emailColumn) {
-          selectOptionByValue(document.getElementById('emailColumnSelect'), config.emailColumn);
-        }
-        
-        if (config.ccColumn || config.bccColumn) {
-          if (document.getElementById('ccColumnGroup').classList.contains('hidden')) {
-            toggleCcBcc();
-          }
-          
-          if (config.ccColumn) {
-            selectOptionByValue(document.getElementById('ccColumnSelect'), config.ccColumn);
-          }
-          
-          if (config.bccColumn) {
-            selectOptionByValue(document.getElementById('bccColumnSelect'), config.bccColumn);
-          }
-        }
-        
-        // Set remaining fields
-        if (config.fromName) {
-          document.getElementById('fromName').value = config.fromName;
-        }
-        
-        if (config.fromEmail) {
-          selectOptionByValue(document.getElementById('fromEmailSelect'), config.fromEmail);
-        }
-        
-        if (config.subjectLine) {
-          document.getElementById('subjectLine').value = config.subjectLine;
-          updateCharCounter();
-        }
-        
-        // Set CC/BCC overrides if they exist
-        if (config.ccOverride && document.getElementById('ccField')) {
-          document.getElementById('ccField').value = config.ccOverride;
-        }
-        
-        if (config.bccOverride && document.getElementById('bccField')) {
-          document.getElementById('bccField').value = config.bccOverride;
-        }
-        
-        // Update summary
-        updateSummary();
-      }, 1500);
-    }
-  }, 1500);
+  // Store sheet and column values that will be used after validation
+  if (config.sheetName) {
+    window.pendingConfiguration = window.pendingConfiguration || {};
+    window.pendingConfiguration.sheetName = config.sheetName;
+  }
+  
+  if (config.emailColumn) {
+    window.pendingConfiguration = window.pendingConfiguration || {};
+    window.pendingConfiguration.emailColumn = config.emailColumn;
+  }
+  
+  // Store CC/BCC values for later
+  if (config.ccColumn) {
+    window.pendingConfiguration = window.pendingConfiguration || {};
+    window.pendingConfiguration.ccColumn = config.ccColumn;
+  }
+  
+  if (config.bccColumn) {
+    window.pendingConfiguration = window.pendingConfiguration || {};
+    window.pendingConfiguration.bccColumn = config.bccColumn;
+  }
+  
+  // Set remaining fields that don't require validation
+  if (config.fromName) {
+    document.getElementById('fromName').value = config.fromName;
+  }
+  
+  if (config.fromEmail) {
+    selectOptionByValue(document.getElementById('fromEmailSelect'), config.fromEmail);
+  }
+  
+  if (config.subjectLine) {
+    document.getElementById('subjectLine').value = config.subjectLine;
+    updateCharCounter();
+  }
+  
+  // Set CC/BCC override fields if they exist
+  if (config.ccOverride && document.getElementById('ccField')) {
+    document.getElementById('ccField').value = config.ccOverride;
+  }
+  
+  if (config.bccOverride && document.getElementById('bccField')) {
+    document.getElementById('bccField').value = config.bccOverride;
+  }
+  
+  // Show validation needed message
+  showNotification('Configuration loaded. Click "Validate Spreadsheet" to continue setup.', 'info', 10000);
+  
+  // Update summary
+  updateSummary();
+  
+  // Show active configuration indicator
+  document.getElementById('activeConfigName').textContent = config.templateName || config.Template || '';
+  document.getElementById('activeConfigIndicator').classList.remove('hidden');
 }
+
 // Clear all fields
 function clearAllFields() {
   if (confirm('Are you sure you want to reset all fields?')) {

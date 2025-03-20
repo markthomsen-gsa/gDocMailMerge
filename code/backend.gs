@@ -25,22 +25,7 @@ function getDocContent() {
   const body = doc.getBody();
   const fullText = body.getText();
   
-  // Check for template markers
-  const contentStartMarker = "--- EMAIL CONTENT START ---";
-  const contentEndMarker = "--- EMAIL CONTENT END ---";
-  
-  const startIndex = fullText.indexOf(contentStartMarker);
-  const endIndex = fullText.indexOf(contentEndMarker);
-  
-  // If both markers exist, extract only the content between them
-  if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
-    // Extract the content between markers (add marker length to get position after marker)
-    const contentStartPos = startIndex + contentStartMarker.length;
-    return fullText.substring(contentStartPos, endIndex).trim();
-  }
-  
-  // Fallback: If markers not found, return the full document content (for backward compatibility)
-  return fullText;
+  return extractEmailContent(fullText);
 }
 
 /**
@@ -402,7 +387,8 @@ function showLoadTemplateDialog() {
 function getAvailableTemplates() {
   try {
     const docProperties = PropertiesService.getDocumentProperties();
-    const templatesJson = docProperties.getProperty('mailMergeTemplates') || '{}';
+    // FIXED: Use mailMergeConfigs instead of mailMergeTemplates
+    const templatesJson = docProperties.getProperty('mailMergeConfigs') || '{}';
     const templates = JSON.parse(templatesJson);
     
     // Create a simplified list for the dropdown
@@ -410,7 +396,7 @@ function getAvailableTemplates() {
     for (const name in templates) {
       const template = templates[name];
       templateList[name] = {
-        description: template.Description || '',
+        description: template.Description || template.templateDescription || '',
         lastSaved: template.lastSaved || '',
         size: (JSON.stringify(template).length / 1024).toFixed(1) + ' KB'
       };
@@ -432,7 +418,7 @@ function loadTemplateToDocument(templateName) {
   try {
     // Get template from storage
     const docProperties = PropertiesService.getDocumentProperties();
-    const templatesJson = docProperties.getProperty('mailMergeTemplates') || '{}';
+    const templatesJson = docProperties.getProperty('mailMergeConfigs') || '{}';
     const templates = JSON.parse(templatesJson);
     
     if (!templates[templateName]) {
@@ -444,12 +430,8 @@ function loadTemplateToDocument(templateName) {
     
     const template = templates[templateName];
     
-    // Check if document content should be replaced
-    const doc = DocumentApp.getActiveDocument();
-    const body = doc.getBody();
-    
     // Check if document has content and confirm overwrite
-    if (body.getText().trim().length > 0) {
+    if (DocumentApp.getActiveDocument().getBody().getText().trim().length > 0) {
       const ui = DocumentApp.getUi();
       const response = ui.alert(
         'Replace Document Content?',
@@ -465,140 +447,27 @@ function loadTemplateToDocument(templateName) {
       }
     }
     
-    // Clear the document
-    body.clear();
-    
-    // If the template has content with markers, we need to reconstruct it properly
+    // Extract content from template if it exists
+    let content = "";
     if (template.documentContent) {
-      // First, add the configuration section header
-      let paragraph = body.appendParagraph("--- CONFIGURATION START ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
-      // Create configuration table
-      const table = body.appendTable();
-      
-      // Add header row
-      const headerRow = table.appendTableRow();
-      const attrHeaderCell = headerRow.appendTableCell("Attribute Name");
-      const valueHeaderCell = headerRow.appendTableCell("Value");
-      const statusHeaderCell = headerRow.appendTableCell("Status");
-      
-      // Format header cells
-      attrHeaderCell.setBackgroundColor("#f3f3f3").setBold(true).setFontFamily("Arial");
-      valueHeaderCell.setBackgroundColor("#f3f3f3").setBold(true).setFontFamily("Arial");
-      statusHeaderCell.setBackgroundColor("#f3f3f3").setBold(true).setFontFamily("Arial");
-      
-      // Set cell widths in header row to establish column widths
-      // We can't set table width directly, but we can use relative widths for cells
-      try {
-        const headerParagraphs = [
-          attrHeaderCell.getChild(0).asParagraph(),
-          valueHeaderCell.getChild(0).asParagraph(),
-          statusHeaderCell.getChild(0).asParagraph()
-        ];
-        
-        // Set different indentation to influence column widths
-        headerParagraphs[0].setIndentStart(0).setIndentFirstLine(0);   // Attribute column
-        headerParagraphs[1].setIndentStart(0).setIndentFirstLine(0);   // Value column (make widest)
-        headerParagraphs[2].setIndentStart(0).setIndentFirstLine(0);   // Status column
-      } catch (e) {
-        // Ignore formatting errors, continue with the function
-        Logger.log("Error formatting header cells: " + e.message);
-      }
-      
-      // Add template configuration rows
-      addConfigRowToTable(table, "Template Name", template["Template Name"] || templateName, "Required");
-      addConfigRowToTable(table, "Description", template.Description || "", "Optional");
-      addConfigRowToTable(table, "Spreadsheet", template.Spreadsheet || template.spreadsheetUrl || "", "Required");
-      addConfigRowToTable(table, "Sheet Name", template["Sheet Name"] || template.sheetName || "", "Required");
-      addConfigRowToTable(table, "Email Column", template["Email Column"] || template.emailColumn || "", "Required");
-      addConfigRowToTable(table, "Subject Line", template["Subject Line"] || template.subjectLine || "", "Required");
-      addConfigRowToTable(table, "Last Updated", new Date().toLocaleDateString(), "Auto");
-      
-      // Add configuration end marker
-      paragraph = body.appendParagraph("--- CONFIGURATION END ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
-      // Add spacing
-      body.appendParagraph("").setFontFamily("Arial");
-      
-      // Add content section header
-      paragraph = body.appendParagraph("--- EMAIL CONTENT START ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
-      // Extract content from template if it exists
-      let content = "";
-      if (template.documentContent) {
-        const startMarker = "--- EMAIL CONTENT START ---";
-        const endMarker = "--- EMAIL CONTENT END ---";
-        const startIndex = template.documentContent.indexOf(startMarker);
-        const endIndex = template.documentContent.indexOf(endMarker);
-        
-        if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
-          content = template.documentContent.substring(startIndex + startMarker.length, endIndex).trim();
-        }
-      }
-      
-      // Add the content paragraph with Arial font
-      const contentPara = body.appendParagraph(content || "Template content not found. Please add your email content here.");
-      contentPara.setFontFamily("Arial");
-      
-      // Add content end marker
-      paragraph = body.appendParagraph("--- EMAIL CONTENT END ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
+      content = extractEmailContent(template.documentContent);
+    }
+    
+    // Rebuild the document structure
+    const rebuildSuccess = rebuildTemplateDocument(template, content);
+    
+    if (!rebuildSuccess) {
       return {
-        success: true,
-        message: `Template "${templateName}" loaded successfully!`,
-        config: convertTemplateToUIConfig(template)
-      };
-    } else {
-      // Legacy templates simplified - create basic structure
-      let paragraph = body.appendParagraph("--- CONFIGURATION START ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
-      // Create a simple configuration table
-      const table = body.appendTable();
-      addConfigRowToTable(table, "Template Name", templateName, "Required");
-      
-      // Add remaining sections
-      paragraph = body.appendParagraph("--- CONFIGURATION END ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
-      body.appendParagraph("").setFontFamily("Arial");
-      
-      paragraph = body.appendParagraph("--- EMAIL CONTENT START ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
-      // Add placeholder content for legacy templates
-      const contentPara = body.appendParagraph("Your email content here...");
-      contentPara.setFontFamily("Arial");
-      
-      paragraph = body.appendParagraph("--- EMAIL CONTENT END ---");
-      paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      paragraph.setFontFamily("Arial");
-      paragraph.setBold(true);
-      
-      return {
-        success: true,
-        message: `Template "${templateName}" loaded using legacy format.`,
-        config: convertTemplateToUIConfig(template)
+        success: false,
+        message: "Error rebuilding document structure."
       };
     }
+    
+    return {
+      success: true,
+      message: `Template "${templateName}" loaded successfully!`,
+      config: convertTemplateToUIConfig(template)
+    };
   } catch (e) {
     Logger.log("Error loading template: " + e.message);
     return {
@@ -708,7 +577,8 @@ function backupTemplatesToEmail() {
   try {
     // Get templates from storage
     const docProperties = PropertiesService.getDocumentProperties();
-    const templatesJson = docProperties.getProperty('mailMergeTemplates') || '{}';
+    // FIXED: use mailMergeConfigs instead of mailMergeTemplates
+    const templatesJson = docProperties.getProperty('mailMergeConfigs') || '{}';
     const templates = JSON.parse(templatesJson);
     
     // Check if there are any templates to backup
@@ -1612,6 +1482,9 @@ function validateSpreadsheet(spreadsheetUrl) {
  */
 function validateDataSource(spreadsheetUrl, sheetName, emailColumn) {
   try {
+    // Add debug logs
+    Logger.log(`validateDataSource called with: url=${spreadsheetUrl}, sheet=${sheetName}, emailCol=${emailColumn}`);
+    
     // Step 1: Validate spreadsheet
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
@@ -1677,8 +1550,10 @@ function validateDataSource(spreadsheetUrl, sheetName, emailColumn) {
       }
     }
     
+    Logger.log(`validateDataSource results: ${JSON.stringify(result)}`);
     return result;
   } catch (e) {
+    Logger.log(`validateDataSource error: ${e.message}`);
     return {
       success: false,
       message: "Error validating data source: " + e.message
@@ -2076,4 +1951,97 @@ function backupTemplatesToEmailAndShowResult() {
   } else {
     ui.alert('Error', result.message, ui.ButtonSet.OK);
   }
+}
+
+/**
+ * Rebuilds a template document with proper structure
+ * @param {Object} config - Template configuration data
+ * @param {string} emailContent - Plain text email content
+ * @return {boolean} Success status
+ */
+function rebuildTemplateDocument(config, emailContent) {
+  try {
+    const doc = DocumentApp.getActiveDocument();
+    const body = doc.getBody();
+    
+    // Clear the document
+    body.clear();
+    
+    // Add configuration section header
+    const configStartPara = body.appendParagraph("--- CONFIGURATION START ---");
+    configStartPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    configStartPara.setFontFamily("Courier New");
+    configStartPara.setBold(true);
+    
+    // Create configuration table
+    const table = body.appendTable();
+    
+    // Add table headers
+    const headerRow = table.appendTableRow();
+    headerRow.appendTableCell("Attribute Name").setBackgroundColor("#f3f3f3").setBold(true);
+    headerRow.appendTableCell("Value").setBackgroundColor("#f3f3f3").setBold(true);
+    headerRow.appendTableCell("Status").setBackgroundColor("#f3f3f3").setBold(true);
+    headerRow.appendTableCell("Description").setBackgroundColor("#f3f3f3").setBold(true);
+    
+    // Add template configuration rows
+    addTemplateTableRow(table, "Template Name", config["Template Name"] || "", "Required", "Unique template identifier");
+    addTemplateTableRow(table, "Description", config["Description"] || "", "Optional", "Purpose of this template");
+    addTemplateTableRow(table, "Spreadsheet", config["Spreadsheet"] || config.spreadsheetUrl || "", "Required", "Data source spreadsheet");
+    addTemplateTableRow(table, "Sheet Name", config["Sheet Name"] || config.sheetName || "", "Required", "Specific sheet to use");
+    addTemplateTableRow(table, "Email Column", config["Email Column"] || config.emailColumn || "", "Required", "Column with recipient emails");
+    addTemplateTableRow(table, "Subject Line", config["Subject Line"] || config.subjectLine || "", "Required", "Email subject line");
+    addTemplateTableRow(table, "Last Updated", new Date().toLocaleDateString(), "Auto", "Last modified date");
+    
+    // Add configuration end marker
+    const configEndPara = body.appendParagraph("--- CONFIGURATION END ---");
+    configEndPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    configEndPara.setFontFamily("Courier New");
+    configEndPara.setBold(true);
+    
+    // Add some spacing
+    body.appendParagraph("");
+    
+    // Add content section header
+    const contentStartPara = body.appendParagraph("--- EMAIL CONTENT START ---");
+    contentStartPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    contentStartPara.setFontFamily("Courier New");
+    contentStartPara.setBold(true);
+    
+    // Add email content
+    body.appendParagraph(emailContent || "");
+    
+    // Add content end marker
+    const contentEndPara = body.appendParagraph("--- EMAIL CONTENT END ---");
+    contentEndPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    contentEndPara.setFontFamily("Courier New");
+    contentEndPara.setBold(true);
+    
+    return true;
+  } catch (e) {
+    Logger.log("Error rebuilding template document: " + e.message);
+    return false;
+  }
+}
+
+/**
+ * Extracts just the email content from a document or text
+ * @param {string} text - The document text or template content
+ * @return {string} The email content between markers
+ */
+function extractEmailContent(text) {
+  const contentStartMarker = "--- EMAIL CONTENT START ---";
+  const contentEndMarker = "--- EMAIL CONTENT END ---";
+  
+  const startIndex = text.indexOf(contentStartMarker);
+  const endIndex = text.indexOf(contentEndMarker);
+  
+  // If both markers exist, extract only the content between them
+  if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+    // Extract the content between markers (add marker length to get position after marker)
+    const contentStartPos = startIndex + contentStartMarker.length;
+    return text.substring(contentStartPos, endIndex).trim();
+  }
+  
+  // Fallback: If markers not found, return empty string
+  return "";
 }

@@ -171,6 +171,9 @@
       const select = document.getElementById('templateSelect');
       select.innerHTML = '<option value="">Choose a template...</option>';
       
+      // Add debug logging
+      console.log('Received templates:', templates);
+      
       // Sort templates alphabetically
       const templateNames = Object.keys(templates).sort();
       
@@ -189,6 +192,7 @@
       
       // Store templates for later use
       window.templateData = templates;
+      console.log('Stored template data, found ' + templateNames.length + ' templates');
     }
     
     function showTemplateDetails() {
@@ -210,6 +214,8 @@
         detailsDiv.innerHTML = '<p>Template details not available</p>';
         return;
       }
+      
+      console.log('Showing details for template:', templateName, template);
       
       let detailsHtml = '';
       
@@ -260,6 +266,8 @@
       document.getElementById('loadingIndicator').style.display = 'block';
       document.getElementById('loadBtn').disabled = true;
       
+      console.log('Loading template:', templateName);
+      
       google.script.run
         .withSuccessHandler(handleLoadSuccess)
         .withFailureHandler(handleLoadError)
@@ -269,6 +277,8 @@
     function handleLoadSuccess(result) {
       // Hide loading indicator
       document.getElementById('loadingIndicator').style.display = 'none';
+      
+      console.log('Template load result:', result);
       
       if (result.success) {
         alert(result.message);
@@ -284,10 +294,12 @@
       document.getElementById('loadingIndicator').style.display = 'none';
       document.getElementById('loadBtn').disabled = false;
       
+      console.error('Error loading template:', error);
       alert('Error loading template: ' + error.message);
     }
     
     function handleError(error) {
+      console.error('Error:', error);
       alert('Error: ' + error.message);
     }
   </script>

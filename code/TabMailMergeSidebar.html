@@ -549,11 +549,11 @@
 
 
 <!-- Data Source Section -->
-  <div id="dataSource" class="section active">
-    <div class="section-indicator">
-      <div class="section-indicator-bar" style="height: 80px;"></div>
-    </div>
-  
+<div id="dataSource" class="section active">
+  <div class="section-indicator">
+    <div class="section-indicator-bar" style="height: 80px;"></div>
+  </div>
+
   <div class="section-header" onclick="toggleSection('dataSource')" aria-expanded="true" aria-controls="dataSourceContent">
     <div class="section-title">
       <span class="section-number">01</span>
@@ -578,7 +578,7 @@
     
     <div class="form-group">
       <button id="validateBtn" onclick="validateSpreadsheet()" style="display: flex; align-items: center; justify-content: center;" aria-label="Validate spreadsheet">
-        <span style="margin-right: 6px;">✓</span> Validate
+        <span style="margin-right: 6px;">✓</span> Validate Spreadsheet
       </button>
     </div>
     
@@ -626,6 +626,19 @@
       <select id="bccColumnSelect" onchange="updateSummary()" aria-label="BCC Recipients Column">
         <option value="">None (Optional)</option>
       </select>
+    </div>
+    
+    <div id="validationStatusGroup" class="form-group hidden">
+      <div class="alert alert-success">
+        <div class="alert-icon">✓</div>
+        <div>
+          <div style="font-weight: 500;">Data Source Validated</div>
+          <div id="validationDetails">
+            <span>Sheet: </span><span id="validationSheet">-</span><br>
+            <span>Recipients: </span><span id="validationRecipientCount">-</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -883,7 +896,7 @@
         </div>
       </div>
       
-      <button id="executeBtn" onclick="executeMailMerge()" class="form-group" style="display: flex; align-items: center; justify-content: center;" aria-label="Send Emails">
+      <button id="executeBtn" onclick="executeMailMerge()" class="form-group" style="display: flex; align-items: center; justify-content: center;" aria-label="Send Emails" disabled>
         <span style="margin-right: 6px;">↑</span> Send Emails
       </button>
       
