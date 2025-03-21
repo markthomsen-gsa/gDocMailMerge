@@ -461,22 +461,21 @@ function extractTemplateConfig() {
 }
 
 /**
- * Extracts configuration from a template table using TEMPLATE_FIELDS
- * @param {Table} table - The configuration table
- * @return {Object} The configuration object
+ * Extracts configuration from a template table using TEMPLATE_FIELDS.
+ * @param {Table} table - The configuration table in a Google Doc.
+ * @return {Object} The configuration object.
  */
 function extractConfigFromTable(table) {
   const config = {};
+  
+  // Determine if the first row is a header and skip it if so.
   const startRow = table.getCell(0, 0).getText().trim() === "Attribute Name" ? 1 : 0;
   
-  // Create mapping of display names to field names
+  // Create mapping of display names to field names from TEMPLATE_FIELDS.
   const displayToFieldMap = {};
   for (const [fieldName, fieldConfig] of Object.entries(TEMPLATE_FIELDS)) {
     displayToFieldMap[fieldConfig.displayName] = fieldName;
   }
-  
-  // Debug with Logger instead of console.log
-  Logger.log("Extracting configuration from table");
   
   for (let i = startRow; i < table.getNumRows(); i++) {
     const row = table.getRow(i);
@@ -484,80 +483,51 @@ function extractConfigFromTable(table) {
     
     const attributeCell = table.getCell(i, 0);
     const valueCell = table.getCell(i, 1);
-    
     if (!attributeCell || !valueCell) continue;
     
     const displayName = attributeCell.getText().trim();
     let value = valueCell.getText().trim();
     
-    // Skip empty attribute names and placeholder values
+    // Skip rows with empty attribute names or placeholder values.
     if (!displayName || (value.startsWith('[') && value.endsWith(']'))) continue;
     
-    // Special handling for Spreadsheet field to support URL chips
     if (displayName === "Spreadsheet") {
-      try {
-        // Get raw text first as a fallback
-        let rawValue = value;
-        
-        // Try to get the URL from rich text format if it's a chip
-        const richText = valueCell.getRichTextValue();
-        if (richText) {
-          // Check for URL in any text runs
-          const runs = richText.getRuns();
-          for (const run of runs) {
-            const linkUrl = run.getLinkUrl();
-            if (linkUrl) {
-              // Use the URL from the chip
-              rawValue = linkUrl;
-              Logger.log("Found URL in chip: " + rawValue);
-              break;
-            }
-          }
-        }
-        
-        // Store the raw value first (important!)
-        const fieldName = displayToFieldMap[displayName];
-        if (fieldName) {
-          config[fieldName] = rawValue;
-        }
-        
-        // Also try to extract ID - but keep original value if this fails
-        try {
-          const spreadsheetId = extractSpreadsheetId(rawValue);
-          if (spreadsheetId && spreadsheetId.length > 10) { // Reasonable ID length check
-            // Only override if we got a valid-looking ID
-            config[fieldName] = spreadsheetId;
-            Logger.log("Extracted ID: " + spreadsheetId);
-          }
-        } catch (idError) {
-          Logger.log("ID extraction error: " + idError.message);
-          // Keep the original value - already saved above
-        }
-      } catch (e) {
-        // If there's any error in rich text handling, log it but keep going
-        Logger.log("Error handling rich text: " + e.message);
-        
-        // Make sure we still save something
-        const fieldName = displayToFieldMap[displayName];
-        if (fieldName && value) {
-          config[fieldName] = value;
-          Logger.log("Using fallback text value: " + value);
-        }
-      }
-    } else {
-      // Standard handling for other fields
       const fieldName = displayToFieldMap[displayName];
-      if (fieldName) {
-        config[fieldName] = value;
+      if (!fieldName) continue;
+      
+      // If a value exists, try to extract a valid spreadsheet ID.
+      if (value) {
+        try {
+          const spreadsheetId = extractSpreadsheetId(value);
+          // Use the extracted spreadsheet ID if it seems valid.
+          if (spreadsheetId && spreadsheetId.length > 10) {
+            config[fieldName] = spreadsheetId;
+          } else {
+            config[fieldName] = value;
+          }
+        } catch (e) {
+          // If extraction fails, use the raw value.
+          config[fieldName] = value;
+        }
       } else {
-        // For backward compatibility, store by display name
-        config[displayName] = value;
+        config[fieldName] = value;
       }
+      continue;
+    }
+    
+    // Standard handling for other fields.
+    const fieldName = displayToFieldMap[displayName];
+    if (fieldName) {
+      config[fieldName] = value;
+    } else {
+      // For backward compatibility, store by display name.
+      config[displayName] = value;
     }
   }
   
   return config;
 }
+
 
 /**
  * Saves the current document as a template to storage.
