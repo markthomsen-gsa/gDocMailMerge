@@ -14,7 +14,7 @@ const TEMPLATE_FIELDS = {
   "templateName": {
     displayName: "Template Name",
     status: "Required",
-    default: "{env}-{campign}-{moniker}",
+    default: "{env}-{campaign}-{moniker}",
     description: "Unique template identifier"
   },
   "description": {
