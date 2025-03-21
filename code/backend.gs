@@ -38,55 +38,48 @@ const APP_DEFAULTS = {
   requiredFields: ["Template Name", "Spreadsheet", "Sheet Name", "Email Column", "Subject Line"]
 };
 
-/**
- * CONFIGURATION: Table styling preferences
- * This object controls all table styling throughout the application
- */
 const TABLE_STYLES = {
-  // Table properties
   tableProperties: {
-    borderWidth: 1,
-    borderColor: "#dadce0"
+    borderWidth: 0.5,            // Thin borders
+    borderColor: "#e0e0e0"       // Light gray
   },
   
-  // Column widths (in points)
   columnWidths: {
-    attributeColumn: 150,
-    valueColumn: 250,
+    attributeColumn: 130,
+    valueColumn: 270,
     statusColumn: 100
   },
   
-  // Header row styling
   headerRow: {
-    fontFamily: "Arial",
-    fontSize: 10, 
+    fontFamily: "Open Sans",
+    fontSize: 9,
     bold: true,
-    backgroundColor: "#f3f3f3"
+    backgroundColor: "#f8f9fa",  // Very light gray
+    foregroundColor: "#202124"   // Dark gray text
   },
   
-  // Attribute column (1st column) styling
   attributeColumn: {
-    fontFamily: "Arial",
-    fontSize: 10,
-    bold: true
+    fontFamily: "Open Sans",
+    fontSize: 9,
+    bold: true,
+    foregroundColor: "#202124"
   },
   
-  // Value column (2nd column) styling
   valueColumn: {
-    fontFamily: "Arial", 
-    fontSize: 8,
-    bold: false
+    fontFamily: "Open Sans",
+    fontSize: 9,
+    bold: false,
+    foregroundColor: "#5f6368"   // Medium gray text
   },
   
-  // Status column (3rd column) styling
   statusColumn: {
-    fontFamily: "Arial",
+    fontFamily: "Open Sans",
     fontSize: 8,
     bold: false,
-    // Color coding for different status types
-    requiredColor: "#fce8e6",
-    optionalColor: "#e6f4ea",
-    autoColor: "#e8f0fe"
+    horizontalAlignment: DocumentApp.HorizontalAlignment.CENTER,
+    requiredColor: "#fdefe9",    // Very light red
+    optionalColor: "#e6f4ea",    // Very light green
+    autoColor: "#e8f0fe"         // Very light blue
   }
 };
 
