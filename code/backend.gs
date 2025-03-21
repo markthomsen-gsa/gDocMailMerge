@@ -7,6 +7,90 @@
 "use strict";
 
 /**
+ * CONFIGURATION: Table styling preferences
+ * This object controls all table styling throughout the application
+ * Edit these values to change the appearance of template tables
+ */
+/**
+ * CONFIGURATION: Application Defaults
+ * Default values used throughout the application
+ */
+const APP_DEFAULTS = {
+  // User Information
+  fromName: "Mail Merge Sender",
+  fromEmail: Session.getActiveUser().getEmail() || "",
+  testEmail: Session.getActiveUser().getEmail() || "",
+  
+  // Default template values
+  defaultSubjectLine: "[Enter Subject Line]",
+  defaultDescription: "Mail Merge Template",
+  
+  // Markers
+  configStartMarker: "--- CONFIGURATION START ---",
+  configEndMarker: "--- CONFIGURATION END ---",
+  contentStartMarker: "--- EMAIL CONTENT START ---",
+  contentEndMarker: "--- EMAIL CONTENT END ---",
+  
+  // Placeholders
+  defaultPlaceholders: ["FirstName", "LastName", "Email", "Company"],
+  
+  // Validation
+  requiredFields: ["Template Name", "Spreadsheet", "Sheet Name", "Email Column", "Subject Line"]
+};
+
+/**
+ * CONFIGURATION: Table styling preferences
+ * This object controls all table styling throughout the application
+ */
+const TABLE_STYLES = {
+  // Table properties
+  tableProperties: {
+    borderWidth: 1,
+    borderColor: "#dadce0"
+  },
+  
+  // Column widths (in points)
+  columnWidths: {
+    attributeColumn: 150,
+    valueColumn: 250,
+    statusColumn: 100
+  },
+  
+  // Header row styling
+  headerRow: {
+    fontFamily: "Arial",
+    fontSize: 10, 
+    bold: true,
+    backgroundColor: "#f3f3f3"
+  },
+  
+  // Attribute column (1st column) styling
+  attributeColumn: {
+    fontFamily: "Arial",
+    fontSize: 10,
+    bold: true
+  },
+  
+  // Value column (2nd column) styling
+  valueColumn: {
+    fontFamily: "Arial", 
+    fontSize: 8,
+    bold: false
+  },
+  
+  // Status column (3rd column) styling
+  statusColumn: {
+    fontFamily: "Arial",
+    fontSize: 8,
+    bold: false,
+    // Color coding for different status types
+    requiredColor: "#fce8e6",
+    optionalColor: "#e6f4ea",
+    autoColor: "#e8f0fe"
+  }
+};
+
+/**
  * Gets HTML content from a file.
  * @param {string} filename - The name of the HTML file.
  * @return {string} The HTML content.
@@ -31,6 +115,7 @@ function getDocContent() {
 /**
  * Creates a new template in the current document.
  * Inserts configuration markers, table, and content markers.
+ * Uses the TABLE_STYLES configuration for consistent styling.
  */
 function createNewTemplate() {
   const doc = DocumentApp.getActiveDocument();
@@ -54,7 +139,7 @@ function createNewTemplate() {
   body.clear();
   
   // Add configuration section header
-  const configStartPara = body.appendParagraph("--- CONFIGURATION START ---");
+  const configStartPara = body.appendParagraph(APP_DEFAULTS.configStartMarker);
   configStartPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   configStartPara.setFontFamily("Courier New");
   configStartPara.setBold(true);
@@ -62,24 +147,48 @@ function createNewTemplate() {
   // Create configuration table
   const table = body.appendTable();
   
-  // Add table headers
+  // Apply table border if specified
+  if (TABLE_STYLES.tableProperties.borderWidth) {
+    table.setBorderWidth(TABLE_STYLES.tableProperties.borderWidth);
+  }
+  if (TABLE_STYLES.tableProperties.borderColor) {
+    table.setBorderColor(TABLE_STYLES.tableProperties.borderColor);
+  }
+  
+  // Add table headers with styling from configuration
   const headerRow = table.appendTableRow();
-  headerRow.appendTableCell("Attribute Name").setBackgroundColor("#f3f3f3").setBold(true);
-  headerRow.appendTableCell("Value").setBackgroundColor("#f3f3f3").setBold(true);
-  headerRow.appendTableCell("Status").setBackgroundColor("#f3f3f3").setBold(true);
-  headerRow.appendTableCell("Description").setBackgroundColor("#f3f3f3").setBold(true);
+  
+  // Create and style header cells
+  const headerCells = [
+    headerRow.appendTableCell("Attribute Name"),
+    headerRow.appendTableCell("Value"),
+    headerRow.appendTableCell("Status")
+  ];
+  
+  // Set widths for header cells
+  headerCells[0].setWidth(TABLE_STYLES.columnWidths.attributeColumn);
+  headerCells[1].setWidth(TABLE_STYLES.columnWidths.valueColumn);
+  headerCells[2].setWidth(TABLE_STYLES.columnWidths.statusColumn);
+  
+  // Apply header row styling to all header cells
+  headerCells.forEach(cell => {
+    cell.setFontFamily(TABLE_STYLES.headerRow.fontFamily);
+    cell.setFontSize(TABLE_STYLES.headerRow.fontSize);
+    cell.setBold(TABLE_STYLES.headerRow.bold);
+    cell.setBackgroundColor(TABLE_STYLES.headerRow.backgroundColor);
+  });
   
   // Add template configuration rows
-  addTemplateTableRow(table, "Template Name", "[Enter Template Name]", "Required", "Unique template identifier");
-  addTemplateTableRow(table, "Description", "[Optional Description]", "Optional", "Purpose of this template");
-  addTemplateTableRow(table, "Spreadsheet", "[Paste Spreadsheet URL]", "Required", "Data source spreadsheet");
-  addTemplateTableRow(table, "Sheet Name", "[Sheet Name]", "Required", "Specific sheet to use");
-  addTemplateTableRow(table, "Email Column", "[Column Name]", "Required", "Column with recipient emails");
-  addTemplateTableRow(table, "Subject Line", "[Email Subject]", "Required", "Email subject line");
-  addTemplateTableRow(table, "Last Updated", new Date().toLocaleDateString(), "Auto", "Last modified date");
+  addConfigRowToTable(table, "Template Name", "[Enter Template Name]", "Required");
+  addConfigRowToTable(table, "Description", "[Optional Description]", "Optional");
+  addConfigRowToTable(table, "Spreadsheet", "[Paste Spreadsheet URL]", "Required");
+  addConfigRowToTable(table, "Sheet Name", "[Sheet Name]", "Required");
+  addConfigRowToTable(table, "Email Column", "[Column Name]", "Required");
+  addConfigRowToTable(table, "Subject Line", "[Email Subject]", "Required");
+  addConfigRowToTable(table, "Last Updated", new Date().toLocaleDateString(), "Auto");
   
   // Add configuration end marker
-  const configEndPara = body.appendParagraph("--- CONFIGURATION END ---");
+  const configEndPara = body.appendParagraph(APP_DEFAULTS.configEndMarker);
   configEndPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   configEndPara.setFontFamily("Courier New");
   configEndPara.setBold(true);
@@ -88,7 +197,7 @@ function createNewTemplate() {
   body.appendParagraph("");
   
   // Add content section header
-  const contentStartPara = body.appendParagraph("--- EMAIL CONTENT START ---");
+  const contentStartPara = body.appendParagraph(APP_DEFAULTS.contentStartMarker);
   contentStartPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   contentStartPara.setFontFamily("Courier New");
   contentStartPara.setBold(true);
@@ -104,7 +213,7 @@ function createNewTemplate() {
   body.appendParagraph("{{SenderName}}");
   
   // Add content end marker
-  const contentEndPara = body.appendParagraph("--- EMAIL CONTENT END ---");
+  const contentEndPara = body.appendParagraph(APP_DEFAULTS.contentEndMarker);
   contentEndPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   contentEndPara.setFontFamily("Courier New");
   contentEndPara.setBold(true);
@@ -116,31 +225,6 @@ function createNewTemplate() {
     'A new mail merge template has been created. Please fill in the configuration table and edit the email content.',
     ui.ButtonSet.OK
   );
-}
-
-/**
- * Helper function to add a row to the template configuration table.
- * @param {Table} table - The table to add the row to
- * @param {string} attribute - The attribute name
- * @param {string} value - The value
- * @param {string} status - The status (Required/Optional/Auto)
- * @param {string} description - The description
- */
-function addTemplateTableRow(table, attribute, value, status, description) {
-  const row = table.appendTableRow();
-  row.appendTableCell(attribute).setBold(attribute === "Template Name");
-  row.appendTableCell(value);
-  
-  const statusCell = row.appendTableCell(status);
-  if (status === "Required") {
-    statusCell.setBackgroundColor("#fce8e6");
-  } else if (status === "Optional") {
-    statusCell.setBackgroundColor("#e6f4ea");
-  } else {
-    statusCell.setBackgroundColor("#e8f0fe");
-  }
-  
-  row.appendTableCell(description);
 }
 
 /**
@@ -410,7 +494,7 @@ function getAvailableTemplates() {
 }
 
 /**
- * Loads a template into the current document.
+ * Modified loadTemplateToDocument function that uses the new helpers
  * @param {string} templateName - The name of the template to load
  * @return {Object} Result with success flag and message
  */
@@ -479,6 +563,8 @@ function loadTemplateToDocument(templateName) {
 
 /**
  * Helper function to add a configuration row to the template table.
+ * Uses the TABLE_STYLES configuration for consistent styling.
+ * 
  * @param {Table} table - The table to add the row to
  * @param {string} attribute - The attribute name
  * @param {string} value - The value
@@ -487,27 +573,42 @@ function loadTemplateToDocument(templateName) {
 function addConfigRowToTable(table, attribute, value, status) {
   const row = table.appendTableRow();
   
-  // Create cells
+  // Create cells (3 columns only)
   const attrCell = row.appendTableCell(attribute);
   const valueCell = row.appendTableCell(value);
   const statusCell = row.appendTableCell(status);
   
-  // Set font to Arial for all cells
-  attrCell.setFontFamily("Arial");
-  valueCell.setFontFamily("Arial");
-  statusCell.setFontFamily("Arial");
+  // Set column widths
+  attrCell.setWidth(TABLE_STYLES.columnWidths.attributeColumn);
+  valueCell.setWidth(TABLE_STYLES.columnWidths.valueColumn);
+  statusCell.setWidth(TABLE_STYLES.columnWidths.statusColumn);
   
-  // Make attribute name bold
-  attrCell.setBold(true);
+  // Apply attribute column styling
+  attrCell.setFontFamily(TABLE_STYLES.attributeColumn.fontFamily);
+  attrCell.setFontSize(TABLE_STYLES.attributeColumn.fontSize);
+  attrCell.setBold(TABLE_STYLES.attributeColumn.bold);
   
-  // Set status cell background color
+  // Apply value column styling
+  valueCell.setFontFamily(TABLE_STYLES.valueColumn.fontFamily);
+  valueCell.setFontSize(TABLE_STYLES.valueColumn.fontSize);
+  valueCell.setBold(TABLE_STYLES.valueColumn.bold);
+  
+  // Apply status column styling
+  statusCell.setFontFamily(TABLE_STYLES.statusColumn.fontFamily);
+  statusCell.setFontSize(TABLE_STYLES.statusColumn.fontSize);
+  statusCell.setBold(TABLE_STYLES.statusColumn.bold);
+  
+  // Set status cell background color based on status type
   if (status === "Required") {
-    statusCell.setBackgroundColor("#fce8e6");
+    statusCell.setBackgroundColor(TABLE_STYLES.statusColumn.requiredColor);
   } else if (status === "Optional") {
-    statusCell.setBackgroundColor("#e6f4ea");
+    statusCell.setBackgroundColor(TABLE_STYLES.statusColumn.optionalColor);
   } else {
-    statusCell.setBackgroundColor("#e8f0fe");
+    statusCell.setBackgroundColor(TABLE_STYLES.statusColumn.autoColor);
   }
+  
+  // Set minimal row height
+  row.setMinimumHeight(0);
 }
 
 
@@ -1802,30 +1903,14 @@ function loadConfiguration(name, loadDocumentContent = false) {
     // Handle document content if present and requested
     let documentContentLoaded = false;
     if (config.documentContent && loadDocumentContent) {
-      // Check if the saved content has template markers
-      if (config.documentContent.includes("--- EMAIL CONTENT START ---") && 
-          config.documentContent.includes("--- EMAIL CONTENT END ---")) {
-        
-        // Set the document content directly with markers
-        const doc = DocumentApp.getActiveDocument();
-        const body = doc.getBody();
-        body.clear();
-        body.setText(config.documentContent);
-        documentContentLoaded = true;
-      } else {
-        // Legacy content without markers - wrap it with markers
-        documentContentLoaded = setDocContent(config.documentContent, {
-          Template: name,
-          Version: config.templateVersion || '1.0',
-          Description: config.templateDescription || '',
-          Spreadsheet: config.spreadsheetUrl ? shortenUrl(config.spreadsheetUrl) : '',
-          Sheet: config.sheetName || '',
-          'Email Column': config.emailColumn || '',
-          Subject: config.subjectLine || '',
-          'Required Fields': config.requiredFields ? config.requiredFields.join(', ') : '',
-          'Last Updated': new Date().toLocaleDateString()
-        });
-      }
+      // FIXED: Extract email content properly and rebuild document with structure
+      // Instead of using body.setText() which flattens all formatting
+      
+      // Extract the content between markers
+      const content = extractEmailContent(config.documentContent);
+      
+      // Rebuild the document with proper structure
+      documentContentLoaded = rebuildTemplateDocument(config, content);
       
       if (!documentContentLoaded) {
         return { 
@@ -1955,6 +2040,8 @@ function backupTemplatesToEmailAndShowResult() {
 
 /**
  * Rebuilds a template document with proper structure
+ * Uses the TABLE_STYLES configuration for consistent styling.
+ * 
  * @param {Object} config - Template configuration data
  * @param {string} emailContent - Plain text email content
  * @return {boolean} Success status
@@ -1968,7 +2055,7 @@ function rebuildTemplateDocument(config, emailContent) {
     body.clear();
     
     // Add configuration section header
-    const configStartPara = body.appendParagraph("--- CONFIGURATION START ---");
+    const configStartPara = body.appendParagraph(APP_DEFAULTS.configStartMarker);
     configStartPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     configStartPara.setFontFamily("Courier New");
     configStartPara.setBold(true);
@@ -1976,24 +2063,48 @@ function rebuildTemplateDocument(config, emailContent) {
     // Create configuration table
     const table = body.appendTable();
     
-    // Add table headers
+    // Apply table border if specified
+    if (TABLE_STYLES.tableProperties.borderWidth) {
+      table.setBorderWidth(TABLE_STYLES.tableProperties.borderWidth);
+    }
+    if (TABLE_STYLES.tableProperties.borderColor) {
+      table.setBorderColor(TABLE_STYLES.tableProperties.borderColor);
+    }
+    
+    // Add table headers with styling from configuration
     const headerRow = table.appendTableRow();
-    headerRow.appendTableCell("Attribute Name").setBackgroundColor("#f3f3f3").setBold(true);
-    headerRow.appendTableCell("Value").setBackgroundColor("#f3f3f3").setBold(true);
-    headerRow.appendTableCell("Status").setBackgroundColor("#f3f3f3").setBold(true);
-    headerRow.appendTableCell("Description").setBackgroundColor("#f3f3f3").setBold(true);
+    
+    // Create and style header cells
+    const headerCells = [
+      headerRow.appendTableCell("Attribute Name"),
+      headerRow.appendTableCell("Value"),
+      headerRow.appendTableCell("Status")
+    ];
+    
+    // Set widths for header cells
+    headerCells[0].setWidth(TABLE_STYLES.columnWidths.attributeColumn);
+    headerCells[1].setWidth(TABLE_STYLES.columnWidths.valueColumn);
+    headerCells[2].setWidth(TABLE_STYLES.columnWidths.statusColumn);
+    
+    // Apply header row styling to all header cells
+    headerCells.forEach(cell => {
+      cell.setFontFamily(TABLE_STYLES.headerRow.fontFamily);
+      cell.setFontSize(TABLE_STYLES.headerRow.fontSize);
+      cell.setBold(TABLE_STYLES.headerRow.bold);
+      cell.setBackgroundColor(TABLE_STYLES.headerRow.backgroundColor);
+    });
     
     // Add template configuration rows
-    addTemplateTableRow(table, "Template Name", config["Template Name"] || "", "Required", "Unique template identifier");
-    addTemplateTableRow(table, "Description", config["Description"] || "", "Optional", "Purpose of this template");
-    addTemplateTableRow(table, "Spreadsheet", config["Spreadsheet"] || config.spreadsheetUrl || "", "Required", "Data source spreadsheet");
-    addTemplateTableRow(table, "Sheet Name", config["Sheet Name"] || config.sheetName || "", "Required", "Specific sheet to use");
-    addTemplateTableRow(table, "Email Column", config["Email Column"] || config.emailColumn || "", "Required", "Column with recipient emails");
-    addTemplateTableRow(table, "Subject Line", config["Subject Line"] || config.subjectLine || "", "Required", "Email subject line");
-    addTemplateTableRow(table, "Last Updated", new Date().toLocaleDateString(), "Auto", "Last modified date");
+    addConfigRowToTable(table, "Template Name", config["Template Name"] || "", "Required");
+    addConfigRowToTable(table, "Description", config["Description"] || "", "Optional");
+    addConfigRowToTable(table, "Spreadsheet", config["Spreadsheet"] || config.spreadsheetUrl || "", "Required");
+    addConfigRowToTable(table, "Sheet Name", config["Sheet Name"] || config.sheetName || "", "Required");
+    addConfigRowToTable(table, "Email Column", config["Email Column"] || config.emailColumn || "", "Required");
+    addConfigRowToTable(table, "Subject Line", config["Subject Line"] || config.subjectLine || "", "Required");
+    addConfigRowToTable(table, "Last Updated", new Date().toLocaleDateString(), "Auto");
     
     // Add configuration end marker
-    const configEndPara = body.appendParagraph("--- CONFIGURATION END ---");
+    const configEndPara = body.appendParagraph(APP_DEFAULTS.configEndMarker);
     configEndPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     configEndPara.setFontFamily("Courier New");
     configEndPara.setBold(true);
@@ -2002,7 +2113,7 @@ function rebuildTemplateDocument(config, emailContent) {
     body.appendParagraph("");
     
     // Add content section header
-    const contentStartPara = body.appendParagraph("--- EMAIL CONTENT START ---");
+    const contentStartPara = body.appendParagraph(APP_DEFAULTS.contentStartMarker);
     contentStartPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     contentStartPara.setFontFamily("Courier New");
     contentStartPara.setBold(true);
@@ -2011,7 +2122,7 @@ function rebuildTemplateDocument(config, emailContent) {
     body.appendParagraph(emailContent || "");
     
     // Add content end marker
-    const contentEndPara = body.appendParagraph("--- EMAIL CONTENT END ---");
+    const contentEndPara = body.appendParagraph(APP_DEFAULTS.contentEndMarker);
     contentEndPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     contentEndPara.setFontFamily("Courier New");
     contentEndPara.setBold(true);
@@ -2025,12 +2136,14 @@ function rebuildTemplateDocument(config, emailContent) {
 
 /**
  * Extracts just the email content from a document or text
+ * Uses the configured content markers
+ * 
  * @param {string} text - The document text or template content
  * @return {string} The email content between markers
  */
 function extractEmailContent(text) {
-  const contentStartMarker = "--- EMAIL CONTENT START ---";
-  const contentEndMarker = "--- EMAIL CONTENT END ---";
+  const contentStartMarker = APP_DEFAULTS.contentStartMarker;
+  const contentEndMarker = APP_DEFAULTS.contentEndMarker;
   
   const startIndex = text.indexOf(contentStartMarker);
   const endIndex = text.indexOf(contentEndMarker);
