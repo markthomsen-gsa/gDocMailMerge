@@ -45,7 +45,7 @@
       border: 1px solid #dadce0;
       border-radius: 4px;
       margin-bottom: 16px;
-      height: 100px;
+      height: 120px; /* Increased height */
       overflow-y: auto;
     }
     
@@ -56,12 +56,13 @@
     }
     
     .detail-label {
-      flex: 0 0 100px;
+      flex: 0 0 120px;
       color: #5f6368;
     }
     
     .detail-value {
       flex: 1;
+      word-break: break-word;
     }
     
     .warning {
@@ -71,6 +72,27 @@
       padding: 8px;
       margin-bottom: 16px;
       font-size: 12px;
+    }
+    
+    .options {
+      margin-bottom: 16px;
+    }
+    
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+    }
+    
+    .checkbox-container input {
+      margin-right: 8px;
+    }
+    
+    .checkbox-container label {
+      display: inline;
+      margin-bottom: 0;
+      font-size: 13px;
+      color: #202124;
     }
     
     .buttons {
@@ -138,6 +160,17 @@
   <div id="warningBox" class="warning" style="display: none;">
     <strong>Warning:</strong> Loading a template will replace the current document content. 
     Make sure to save any important content before proceeding.
+  </div>
+  
+  <div class="options">
+    <div class="checkbox-container">
+      <input type="checkbox" id="loadContent" checked>
+      <label for="loadContent">Load template content</label>
+    </div>
+    <div class="checkbox-container">
+      <input type="checkbox" id="loadToSidebar" checked>
+      <label for="loadToSidebar">Also load settings to sidebar</label>
+    </div>
   </div>
   
   <div id="loadingIndicator">
@@ -250,6 +283,14 @@
         `;
       }
       
+      // Add content status - show if template has content
+      detailsHtml += `
+        <div class="detail-row">
+          <div class="detail-label">Content:</div>
+          <div class="detail-value">${template.hasContent ? 'Available' : 'Not available'}</div>
+        </div>
+      `;
+      
       // If no details were added, show a message
       if (!detailsHtml) {
         detailsHtml = '<p>No additional details available</p>';
@@ -262,16 +303,19 @@
       const templateName = document.getElementById('templateSelect').value;
       if (!templateName) return;
       
+      const loadContent = document.getElementById('loadContent').checked;
+      const loadToSidebar = document.getElementById('loadToSidebar').checked;
+      
       // Show loading indicator
       document.getElementById('loadingIndicator').style.display = 'block';
       document.getElementById('loadBtn').disabled = true;
       
-      console.log('Loading template:', templateName);
+      console.log('Loading template:', templateName, 'with content:', loadContent);
       
       google.script.run
         .withSuccessHandler(handleLoadSuccess)
         .withFailureHandler(handleLoadError)
-        .loadTemplateToDocument(templateName);
+        .loadConfiguration(templateName, loadContent);
     }
     
     function handleLoadSuccess(result) {
@@ -281,7 +325,19 @@
       console.log('Template load result:', result);
       
       if (result.success) {
-        alert(result.message);
+        const loadContent = document.getElementById('loadContent').checked;
+        const loadToSidebar = document.getElementById('loadToSidebar').checked;
+        
+        let message = "Template loaded successfully!";
+        if (loadContent && result.documentContentLoaded) {
+          message += " Document content was restored.";
+        }
+        if (loadToSidebar) {
+          // Set flag to refresh configurations in sidebar
+          google.script.run.setConfigurationRefreshFlag();
+        }
+        
+        alert(message);
         google.script.host.close();
       } else {
         document.getElementById('loadBtn').disabled = false;

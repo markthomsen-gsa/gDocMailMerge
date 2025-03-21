@@ -263,335 +263,6 @@
     }
   }
   
-  // Real-time validation for spreadsheet URL
-  function validateSpreadsheetRealtime() {
-    const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
-    if (!spreadsheetUrl) return;
-    
-    // Basic pattern matching for spreadsheet URLs or IDs
-    const urlPattern = /https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/;
-    const idPattern = /^[a-zA-Z0-9_-]{30,}$/;
-    
-    const urlMatch = spreadsheetUrl.match(urlPattern);
-    const isValidUrl = urlMatch && urlMatch[1];
-    const isValidId = idPattern.test(spreadsheetUrl);
-    
-    if (isValidUrl || isValidId) {
-      // URL/ID looks valid - enable validate button
-      document.getElementById('validateBtn').disabled = false;
-      // No auto-validation
-    } else {
-      // URL/ID doesn't look valid
-      document.getElementById('validateBtn').disabled = false;
-    }
-  }
-
-  /**
-   * Single-step validation function to handle all data source validation tasks.
-   * This implements the new simplified validation process.
-   */
-  function validateDataSource() {
-    // Get all relevant field values
-    const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
-    const sheetName = document.getElementById('sheetSelect').value.trim();
-    const emailColumn = document.getElementById('emailColumnSelect').value.trim();
-    
-    // Make sure we have at least a spreadsheet URL
-    if (!spreadsheetUrl) {
-      showNotification('Please enter a spreadsheet URL or ID', 'error', config.toastDuration);
-      return;
-    }
-    
-    // Show loading state
-    const validateBtn = document.getElementById('validateDataSourceBtn');
-    validateBtn.disabled = true;
-    
-    // Change button text to show we're processing
-    const originalBtnText = validateBtn.innerHTML;
-    validateBtn.innerHTML = `<span class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span> Validating...`;
-    
-    // Show loading notification
-    const loadingNotification = showNotification('Validating data source...', 'info', 0);
-    
-    // Hide validation success indicators if present
-    toggleVisibility('validationSuccessIndicator', false);
-    
-    // Call the server-side validation function
-    google.script.run
-      .withSuccessHandler(function(result) {
-        // Restore button state
-        validateBtn.innerHTML = originalBtnText;
-        validateBtn.disabled = false;
-        
-        // Remove loading notification
-        if (loadingNotification) {
-          loadingNotification.remove();
-        }
-        
-        // Update button text for re-validation
-        validateBtn.innerHTML = `<span style="margin-right: 6px;">✓</span> Re-validate Data Source`;
-        
-        // Handle successful validation
-        handleDataSourceValidation(result);
-      })
-      .withFailureHandler(function(error) {
-        // Restore button state
-        validateBtn.innerHTML = originalBtnText;
-        validateBtn.disabled = false;
-        
-        // Remove loading notification
-        if (loadingNotification) {
-          loadingNotification.remove();
-        }
-        
-        // Show error
-        showNotification('Error validating data source: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
-      })
-      .validateDataSource(spreadsheetUrl, sheetName, emailColumn);
-  }
-
-  /**
-   * Handler for data source validation results.
-   * @param {Object} result - The validation results
-   */
-  function handleDataSourceValidation(result) {
-    if (!result.success) {
-      showNotification(result.message || 'Error validating data source', 'error', config.toastDuration);
-      return;
-    }
-    
-    // Successful validation
-    showNotification('Data source validated successfully!', 'success', config.toastDuration);
-    
-    // Store the spreadsheet data
-    if (result.spreadsheet && result.spreadsheet.valid) {
-      spreadsheetData.id = result.spreadsheet.id;
-      spreadsheetData.name = result.spreadsheet.name;
-      spreadsheetData.url = result.spreadsheet.url;
-    }
-    
-    // Store sheet data
-    if (result.sheet && result.sheet.valid) {
-      spreadsheetData.sheetName = result.sheet.name;
-      
-      // Update summary
-      document.getElementById('summarySheet').textContent = result.sheet.name;
-      
-      // Update validation summary
-      if (document.getElementById('validationSheet')) {
-        document.getElementById('validationSheet').textContent = result.sheet.name;
-      }
-    }
-    
-    // Populate sheet selector if needed
-    if (result.sheet && result.sheet.valid && result.headers) {
-      // If the sheet wasn't previously selected, populate the dropdown and select it
-      const sheetSelect = document.getElementById('sheetSelect');
-      if (!sheetSelect.value) {
-        // Clear and create options
-        sheetSelect.innerHTML = '<option value="">Select a sheet...</option>';
-        
-        // Add all available sheets
-        if (result.availableSheets && result.availableSheets.length > 0) {
-          result.availableSheets.forEach(sheet => {
-            const option = document.createElement('option');
-            option.value = sheet;
-            option.textContent = sheet;
-            sheetSelect.appendChild(option);
-          });
-        } else {
-          // Just add the validated sheet
-          const option = document.createElement('option');
-          option.value = result.sheet.name;
-          option.textContent = result.sheet.name;
-          sheetSelect.appendChild(option);
-        }
-        
-        // Select the validated sheet
-        sheetSelect.value = result.sheet.name;
-      }
-      
-      // Update column headers and populate the email column dropdown
-      spreadsheetData.columnHeaders = result.headers;
-      
-      // Populate or update email column dropdown
-      const emailColumnSelect = document.getElementById('emailColumnSelect');
-      emailColumnSelect.innerHTML = '<option value="">Select recipients column...</option>';
-      
-      result.headers.forEach(header => {
-        const option = document.createElement('option');
-        option.value = header;
-        option.textContent = header;
-        emailColumnSelect.appendChild(option);
-      });
-      
-      // Set the email column if it was validated
-      if (result.emailColumn && result.emailColumn.valid) {
-        emailColumnSelect.value = result.emailColumn.name;
-        
-        // Store the email column
-        spreadsheetData.emailColumn = result.emailColumn.name;
-        
-        // Update summary
-        document.getElementById('summaryEmailColumn').textContent = result.emailColumn.name;
-      }
-      
-      // Populate CC/BCC column dropdowns as well
-      populateCcBccDropdowns(result.headers);
-      
-      // Update placeholders list
-      updatePlaceholdersList();
-      
-      // Store recipient count
-      if (result.recipientCount !== undefined) {
-        spreadsheetData.recipientCount = result.recipientCount;
-        document.getElementById('summaryRecipientCount').textContent = 
-          result.recipientCount ? result.recipientCount : '-';
-        
-        // Update validation summary
-        if (document.getElementById('validationRecipientCount')) {
-          document.getElementById('validationRecipientCount').textContent = 
-            result.recipientCount ? result.recipientCount : '-';
-        }
-        
-        // Update quota display
-        updateQuotaDisplay();
-      }
-    }
-    
-    // Show validation success indicator
-    toggleVisibility('validationSuccessIndicator', true);
-    
-    // Show all necessary UI elements
-    toggleVisibility('sheetSelectGroup', true);
-    toggleVisibility('emailColumnGroup', true);
-    toggleVisibility('ccBccToggleGroup', true);
-    
-    // Enable the Send Emails button
-    const executeBtn = document.getElementById('executeBtn');
-    if (executeBtn) {
-      executeBtn.disabled = false;
-    }
-    
-    // Show direct link to open spreadsheet
-    toggleVisibility('openSpreadsheetLink', true);
-  }
-
-  /**
-   * Populate CC/BCC dropdowns with available headers
-   * @param {string[]} headers - The column headers
-   */
-  function populateCcBccDropdowns(headers) {
-    // CC Column dropdown
-    const ccColumnSelect = document.getElementById('ccColumnSelect');
-    ccColumnSelect.innerHTML = '<option value="">None (Optional)</option>';
-    
-    // BCC Column dropdown
-    const bccColumnSelect = document.getElementById('bccColumnSelect');
-    bccColumnSelect.innerHTML = '<option value="">None (Optional)</option>';
-    
-    // Add options for each header
-    headers.forEach(header => {
-      // Add to CC dropdown
-      const ccOption = document.createElement('option');
-      ccOption.value = header;
-      ccOption.textContent = header;
-      ccColumnSelect.appendChild(ccOption);
-      
-      // Add to BCC dropdown
-      const bccOption = document.createElement('option');
-      bccOption.value = header;
-      bccOption.textContent = header;
-      bccColumnSelect.appendChild(bccOption);
-    });
-    
-    // If we have stored values for CC/BCC, set them
-    if (spreadsheetData.ccColumn) {
-      ccColumnSelect.value = spreadsheetData.ccColumn;
-    }
-    
-    if (spreadsheetData.bccColumn) {
-      bccColumnSelect.value = spreadsheetData.bccColumn;
-    }
-  }
-
-  /**
-   * Opens the spreadsheet in a new browser tab
-   */
-  function openSpreadsheetInBrowser() {
-    if (!spreadsheetData.url) {
-      showNotification('Spreadsheet URL not available', 'error', config.toastDuration);
-      return;
-    }
-    
-    google.script.run
-      .withSuccessHandler(function(result) {
-        if (result.success && result.url) {
-          // Open the URL in a new tab
-          window.open(result.url, '_blank');
-        } else {
-          showNotification('Error opening spreadsheet', 'error', config.toastDuration);
-        }
-      })
-      .withFailureHandler(function(error) {
-        showNotification('Error: ' + (error.message || 'Could not open spreadsheet'), 'error', config.toastDuration);
-      })
-      .openSpreadsheet(spreadsheetData.url);
-  }
-
-  // Helper function to show a notification
-  function showNotification(message, type, duration) {
-    // Create notification element
-    const notificationDiv = document.createElement('div');
-    notificationDiv.className = 'alert alert-' + (type || 'info');
-    notificationDiv.style.position = 'fixed';
-    notificationDiv.style.top = '10px';
-    notificationDiv.style.left = '50%';
-    notificationDiv.style.transform = 'translateX(-50%)';
-    notificationDiv.style.zIndex = '1000';
-    notificationDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-    notificationDiv.style.maxWidth = '280px';
-    notificationDiv.style.wordWrap = 'break-word';
-    notificationDiv.setAttribute('role', 'alert');
-    
-    // Set icon based on type
-    let icon = '⚠';
-    if (type === 'success') icon = '✓';
-    if (type === 'error') icon = '✗';
-    if (type === 'info') icon = 'ℹ';
-    
-    // Add spinner for loading notifications
-    if (duration === 0) {
-      icon = '<span class="spinner" style="width: 14px; height: 14px;"></span>';
-    }
-    
-    // Create notification content
-    notificationDiv.innerHTML = `
-      <div style="display: flex; align-items: center;">
-        <div class="alert-icon">${icon}</div>
-        <div>${message}</div>
-      </div>
-    `;
-    
-    // Add to document
-    document.body.appendChild(notificationDiv);
-    
-    // Remove after duration if specified
-    if (duration > 0) {
-      setTimeout(function() {
-        notificationDiv.style.opacity = '0';
-        notificationDiv.style.transition = 'opacity 0.5s';
-        setTimeout(function() {
-          if (notificationDiv.parentNode) {
-            document.body.removeChild(notificationDiv);
-          }
-        }, 500);
-      }, duration);
-    }
-    
-    return notificationDiv;
-  }
-
   // Function to validate spreadsheet
   function validateSpreadsheet() {
     const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
@@ -659,23 +330,6 @@
         showNotification('Error validating spreadsheet: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
       })
       .validateSpreadsheet(spreadsheetUrl);
-  }
-
-  // Handler for successful spreadsheet validation
-  function handleSpreadsheetValidation(result) {
-    if (result.success) {
-      // Store data
-      spreadsheetData.id = result.id;
-      spreadsheetData.name = result.name;
-      
-      // Show notification for successful validation
-      showNotification('Spreadsheet successfully validated', 'success', config.toastDuration);
-      
-      // Show the Load Sheets button
-      toggleVisibility('loadSheetsGroup', true);
-    } else {
-      showNotification(result.message || 'Error validating spreadsheet', 'error', config.toastDuration);
-    }
   }
 
   // Function to load sheet names - now called manually via button click
@@ -1010,7 +664,75 @@
     showNotification('Copied: ' + text, 'success', config.toastDuration);
   }
 
-  // Function to send test email with improved debugging and timeout handling
+  // Function to open the spreadsheet in browser
+  function openSpreadsheetInBrowser() {
+    if (!spreadsheetData.url) {
+      showNotification('Spreadsheet URL not available', 'error', config.toastDuration);
+      return;
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success && result.url) {
+          // Open the URL in a new tab
+          window.open(result.url, '_blank');
+        } else {
+          showNotification('Error opening spreadsheet', 'error', config.toastDuration);
+        }
+      })
+      .withFailureHandler(function(error) {
+        showNotification('Error: ' + (error.message || 'Could not open spreadsheet'), 'error', config.toastDuration);
+      })
+      .openSpreadsheet(spreadsheetData.url);
+  }
+
+  // Function to update the recipient count when email column changes
+  function updateRecipientCount() {
+    const emailColumn = document.getElementById('emailColumnSelect').value;
+    if (!emailColumn || !spreadsheetData.id || !spreadsheetData.sheetName) {
+      const summaryRecipientCount = document.getElementById('summaryRecipientCount');
+      if (summaryRecipientCount) {
+        summaryRecipientCount.textContent = '-';
+      }
+      return;
+    }
+    
+    // Show loading state
+    const summaryRecipientCount = document.getElementById('summaryRecipientCount');
+    if (summaryRecipientCount) {
+      summaryRecipientCount.textContent = 'Loading...';
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(count) {
+        // Store the recipient count
+        spreadsheetData.recipientCount = count;
+        
+        // Update UI
+        if (summaryRecipientCount) {
+          summaryRecipientCount.textContent = count;
+        }
+        
+        // Update quota display with new recipient count
+        updateQuotaDisplay();
+        
+        // Add toast notification for recipient count
+        showNotification(`Found ${count} potential recipients in the "${emailColumn}" column`, 'info', config.toastDuration);
+      })
+      .withFailureHandler(function(error) {
+        // Show error
+        if (summaryRecipientCount) {
+          summaryRecipientCount.textContent = 'Error';
+        }
+        console.error('Error counting recipients:', error);
+        
+        // Show error notification
+        showNotification('Error determining recipient count', 'error', config.toastDuration);
+      })
+      .getRecipientCount(spreadsheetData.id, spreadsheetData.sheetName, emailColumn);
+  }
+
+  // Function to send a test email
   function sendTestEmail() {
     const testEmail = document.getElementById('testEmailAddress').value.trim();
     if (!testEmail) {
@@ -1041,7 +763,7 @@
     const loadingNotification = showNotification('Sending test email...', 'info', 0);
     
     const fromEmail = document.getElementById('fromEmailSelect').value;
-    const fromName = document.getElementById('fromName').value;
+    const senderDisplayName = document.getElementById('fromName').value; // Changed to senderDisplayName in server side
     
     // Get CC/BCC from fields if available
     const cc = document.getElementById('ccField') ? document.getElementById('ccField').value : '';
@@ -1051,7 +773,7 @@
     console.log('Sending test email to:', testEmail);
     console.log('Subject:', subjectLine);
     console.log('From:', fromEmail);
-    console.log('Display name:', fromName);
+    console.log('Display name:', senderDisplayName);
     
     // Set timeout to prevent infinite waiting
     const timeoutDuration = 30000; // 30 seconds
@@ -1113,15 +835,15 @@
         // Show error
         showNotification('Error sending test email: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
       })
-      // IMPORTANT: Use the correct server function name
-      .sendTestEmailWithData(testEmail, subjectLine, fromEmail, fromName, cc, bcc, {
+      // Use updated parameter name: senderDisplayName instead of fromName
+      .sendTestEmailWithData(testEmail, subjectLine, fromEmail, senderDisplayName, cc, bcc, {
         replacePlaceholders: true,
         spreadsheetId: spreadsheetData.id, 
         sheetName: spreadsheetData.sheetName
       });
   }
 
-  // Function to execute mail merge - now called directly
+  // Function to execute mail merge
   function executeMailMerge() {
     if (!spreadsheetData.id || !spreadsheetData.sheetName) {
       showNotification('Please select a spreadsheet and sheet first', 'error', config.toastDuration);
@@ -1159,7 +881,7 @@
     }
     
     const fromEmail = document.getElementById('fromEmailSelect').value;
-    const fromName = document.getElementById('fromName').value;
+    const senderDisplayName = document.getElementById('fromName').value; // Changed to senderDisplayName in server side
     
     // Store column selections
     spreadsheetData.emailColumn = emailColumn;
@@ -1186,7 +908,8 @@
       cc: document.getElementById('ccField') ? document.getElementById('ccField').value : '',
       bcc: document.getElementById('bccField') ? document.getElementById('bccField').value : '',
       ccColumn: spreadsheetData.ccColumn,
-      bccColumn: spreadsheetData.bccColumn
+      bccColumn: spreadsheetData.bccColumn,
+      batchSize: 50 // Process emails in batches of 50
     };
     
     // Update summary
@@ -1223,7 +946,16 @@
           // Show error
           showNotification('Mail merge failed: ' + (error.message || 'Unknown error'), 'error', config.toastDuration);
         })
-        .executeMailMerge(spreadsheetData.id, spreadsheetData.sheetName, emailColumn, subjectLine, fromEmail, fromName, options);
+        // Update to use senderDisplayName instead of fromName
+        .executeMailMerge(
+          spreadsheetData.id, 
+          spreadsheetData.sheetName, 
+          emailColumn, 
+          subjectLine, 
+          fromEmail, 
+          senderDisplayName, 
+          options
+        );
     }, 100);
   }
 
@@ -1316,115 +1048,115 @@
   
   // Function to load sender emails with better error handling
   function loadSenderEmails() {
-  // Show loading notification
-  const loadingNotification = showNotification('Loading sender information...', 'info', 0);
-  
-  google.script.run
-    .withSuccessHandler(function(emails) {
-      // Remove loading notification
-      if (loadingNotification) {
-        loadingNotification.remove();
-      }
-      
-      // Check if we got an error response
-      if (emails && emails.length > 0 && emails[0].error) {
-        // Show permission error but still continue with empty values
-        showNotification('Permission error: ' + emails[0].error, 'warning', config.toastDuration * 2);
-        console.warn('Permission error loading sender info:', emails[0].error);
-      }
-      
-      // Handle the result (even with errors, we'll have at least one email record)
-      handleSenderEmails(emails);
-      
-      // Also use the user's email for test email field if available
-      if (emails && emails.length > 0 && emails[0].email) {
-        const testEmailField = document.getElementById('testEmailAddress');
-        if (testEmailField) {
-          testEmailField.value = emails[0].email || '';
+    // Show loading notification
+    const loadingNotification = showNotification('Loading sender information...', 'info', 0);
+    
+    google.script.run
+      .withSuccessHandler(function(emails) {
+        // Remove loading notification
+        if (loadingNotification) {
+          loadingNotification.remove();
         }
-      }
-    })
-    .withFailureHandler(function(error) {
-      // Remove loading notification
-      if (loadingNotification) {
-        loadingNotification.remove();
-      }
-      
-      // Log the error for debugging
-      console.error('Server error loading sender information:', error);
-      
-      // Show error with more helpful explanation
-      showNotification(
-        'Error loading sender information. The add-on may need additional permissions.', 
-        'error', 
-        config.toastDuration
-      );
-      
-      // Use fallback values for sender
-      handleSenderEmails([{
-        email: '',
-        name: 'Mail Merge User',
-        isPrimary: true
-      }]);
-    })
-    .getAvailableFromAddresses();
-}
+        
+        // Check if we got an error response
+        if (emails && emails.length > 0 && emails[0].error) {
+          // Show permission error but still continue with empty values
+          showNotification('Permission error: ' + emails[0].error, 'warning', config.toastDuration * 2);
+          console.warn('Permission error loading sender info:', emails[0].error);
+        }
+        
+        // Handle the result (even with errors, we'll have at least one email record)
+        handleSenderEmails(emails);
+        
+        // Also use the user's email for test email field if available
+        if (emails && emails.length > 0 && emails[0].email) {
+          const testEmailField = document.getElementById('testEmailAddress');
+          if (testEmailField) {
+            testEmailField.value = emails[0].email || '';
+          }
+        }
+      })
+      .withFailureHandler(function(error) {
+        // Remove loading notification
+        if (loadingNotification) {
+          loadingNotification.remove();
+        }
+        
+        // Log the error for debugging
+        console.error('Server error loading sender information:', error);
+        
+        // Show error with more helpful explanation
+        showNotification(
+          'Error loading sender information. The add-on may need additional permissions.', 
+          'error', 
+          config.toastDuration
+        );
+        
+        // Use fallback values for sender
+        handleSenderEmails([{
+          email: '',
+          name: 'Mail Merge User',
+          isPrimary: true
+        }]);
+      })
+      .getAvailableFromAddresses();
+  }
   
   // Handler for sender emails with improved error handling
   function handleSenderEmails(emails) {
-  const fromEmailSelect = document.getElementById('fromEmailSelect');
-  if (!fromEmailSelect) return;
-  
-  // Clear existing options
-  fromEmailSelect.innerHTML = '';
-  
-  // Check if we got any valid emails
-  if (!emails || emails.length === 0 || !emails[0].email) {
-    // Add a placeholder if there's a permission issue or no emails
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = 'Use default sender (permission required)';
-    fromEmailSelect.appendChild(option);
+    const fromEmailSelect = document.getElementById('fromEmailSelect');
+    if (!fromEmailSelect) return;
     
-    // Set default sender name with a helpful placeholder
-    const fromNameField = document.getElementById('fromName');
-    if (fromNameField) {
-      fromNameField.value = 'Mail Merge Sender';
-      fromNameField.placeholder = 'Enter your name here';
-    }
-  } else {
-    // Add options for each email
-    emails.forEach(email => {
+    // Clear existing options
+    fromEmailSelect.innerHTML = '';
+    
+    // Check if we got any valid emails
+    if (!emails || emails.length === 0 || !emails[0].email) {
+      // Add a placeholder if there's a permission issue or no emails
       const option = document.createElement('option');
-      option.value = email.email;
-      option.textContent = email.isPrimary ? 
-        `${email.email} (Default)` : 
-        `${email.email} (${email.name || 'Delegated'})`;
+      option.value = '';
+      option.textContent = 'Use default sender (permission required)';
       fromEmailSelect.appendChild(option);
-    });
-    
-    // Set default sender name if available
-    if (emails.length > 0 && emails[0].name) {
-      const fromNameField = document.getElementById('fromName');
-      if (fromNameField) {
-        fromNameField.value = emails[0].name;
+      
+      // Set default sender name with a helpful placeholder
+      const senderNameField = document.getElementById('fromName');
+      if (senderNameField) {
+        senderNameField.value = 'Mail Merge Sender';
+        senderNameField.placeholder = 'Enter your name here';
       }
     } else {
-      getUserName();
+      // Add options for each email
+      emails.forEach(email => {
+        const option = document.createElement('option');
+        option.value = email.email;
+        option.textContent = email.isPrimary ? 
+          `${email.email} (Default)` : 
+          `${email.email} (${email.name || 'Delegated'})`;
+        fromEmailSelect.appendChild(option);
+      });
+      
+      // Set default sender name if available
+      if (emails.length > 0 && emails[0].name) {
+        const senderNameField = document.getElementById('fromName');
+        if (senderNameField) {
+          senderNameField.value = emails[0].name;
+        }
+      } else {
+        getUserName();
+      }
     }
+    
+    // Update summary
+    updateSummary();
   }
-  
-  // Update summary
-  updateSummary();
-}
 
   // Function to get user name
   function getUserName() {
     google.script.run
       .withSuccessHandler(function(name) {
-        const fromNameField = document.getElementById('fromName');
-        if (fromNameField) {
-          fromNameField.value = name;
+        const senderNameField = document.getElementById('fromName');
+        if (senderNameField) {
+          senderNameField.value = name;
         }
         updateSummary();
       })
@@ -1438,59 +1170,13 @@
   function updateSenderName() {
     // This would be more complex with delegated addresses
     // Here we'll just keep the name as is or get it again if empty
-    const fromNameField = document.getElementById('fromName');
-    if (fromNameField && !fromNameField.value) {
+    const senderNameField = document.getElementById('fromName');
+    if (senderNameField && !senderNameField.value) {
       getUserName();
     }
     
     // Update summary
     updateSummary();
-  }
-
-  // Function to update the recipient count when email column changes
-  function updateRecipientCount() {
-    const emailColumn = document.getElementById('emailColumnSelect').value;
-    if (!emailColumn || !spreadsheetData.id || !spreadsheetData.sheetName) {
-      const summaryRecipientCount = document.getElementById('summaryRecipientCount');
-      if (summaryRecipientCount) {
-        summaryRecipientCount.textContent = '-';
-      }
-      return;
-    }
-    
-    // Show loading state
-    const summaryRecipientCount = document.getElementById('summaryRecipientCount');
-    if (summaryRecipientCount) {
-      summaryRecipientCount.textContent = 'Loading...';
-    }
-    
-    google.script.run
-      .withSuccessHandler(function(count) {
-        // Store the recipient count
-        spreadsheetData.recipientCount = count;
-        
-        // Update UI
-        if (summaryRecipientCount) {
-          summaryRecipientCount.textContent = count;
-        }
-        
-        // Update quota display with new recipient count
-        updateQuotaDisplay();
-        
-        // Add toast notification for recipient count
-        showNotification(`Found ${count} potential recipients in the "${emailColumn}" column`, 'info', config.toastDuration);
-      })
-      .withFailureHandler(function(error) {
-        // Show error
-        if (summaryRecipientCount) {
-          summaryRecipientCount.textContent = 'Error';
-        }
-        console.error('Error counting recipients:', error);
-        
-        // Show error notification
-        showNotification('Error determining recipient count', 'error', config.toastDuration);
-      })
-      .getRecipientCount(spreadsheetData.id, spreadsheetData.sheetName, emailColumn);
   }
 
   // Modified function to update summary with subject line
@@ -1506,7 +1192,9 @@
     const ccColumn = getElementValue('ccColumnSelect');
     const bccColumn = getElementValue('bccColumnSelect');
     const fromEmail = getElementValue('fromEmailSelect');
-    const fromName = getElementValue('fromName');
+    // Changed name from 'fromName' to 'senderDisplayName' in backend,
+    // but UI still uses 'fromName' for backward compatibility
+    const senderDisplayName = getElementValue('fromName');
     const subjectLine = getElementValue('subjectLine');
     
     // Update summary display
@@ -1519,7 +1207,7 @@
     updateElementText('summaryEmailColumn', emailColumn);
     updateElementText('summaryCcColumn', ccColumn);
     updateElementText('summaryBccColumn', bccColumn);
-    updateElementText('summaryFromName', fromName);
+    updateElementText('summaryFromName', senderDisplayName);
     updateElementText('summaryFromEmail', fromEmail);
     updateElementText('summarySubject', subjectLine);
     
@@ -1538,330 +1226,338 @@
   }
 
   // Load configuration list into the sidebar
-function loadConfigurationList() {
-  const configSelect = document.getElementById('configSelect');
-  configSelect.innerHTML = '<option value="">Select a configuration...</option>';
-  
-  google.script.run
-    .withSuccessHandler(function(configs) {
-      window.availableConfigs = configs; // Store for later use
-      
-      if (configs && Object.keys(configs).length > 0) {
-        for (const name in configs) {
-          const option = document.createElement('option');
-          option.value = name;
-          option.textContent = name;
-          configSelect.appendChild(option);
-        }
-        
-        showNotification('Configuration list refreshed', 'info', config.toastDuration);
-      } else {
-        showNotification('No saved configurations found', 'info', config.toastDuration);
-      }
-    })
-    .withFailureHandler(function(error) {
-      showNotification('Error loading configurations: ' + error.message, 'error', config.toastDuration);
-    })
-    .getAvailableConfigurations();
-}
-
-// Load selected configuration into the UI fields
-function loadSelectedConfig() {
-  const configName = document.getElementById('configSelect').value;
-  if (!configName) {
-    showNotification('Please select a configuration', 'error', config.toastDuration);
-    return;
-  }
-  
-  const selectedConfig = window.availableConfigs[configName];
-  if (!selectedConfig) {
-    showNotification('Configuration not found', 'error', config.toastDuration);
-    return;
-  }
-  
-  // Check if configuration includes document content
-  if (selectedConfig.documentContent) {
-    // Show confirmation dialog
-    if (confirm('This configuration includes document content that will replace your current document. Continue?')) {
-      // User confirmed, load with document content
-      loadConfigWithContent(configName);
-    } else {
-      // User declined, load without document content
-      loadConfigWithoutContent(configName);
-    }
-  } else {
-    // No document content, proceed with normal loading
-    loadConfigWithoutContent(configName);
-  }
-}
-
-// Helper function to load config with document content
-function loadConfigWithContent(configName) {
-  // Show loading notification
-  showNotification(`Loading configuration "${configName}" with document content...`, 'info', config.toastDuration);
-  
-  google.script.run
-    .withSuccessHandler(function(result) {
-      if (result.success) {
-        // Set flag to refresh configurations when returning to sidebar
-        google.script.run.setConfigurationRefreshFlag();
-        
-        const contentMsg = result.documentContentLoaded ? 
-          ' Document content was also restored.' : 
-          '';
-        showNotification(`Configuration "${configName}" loaded.${contentMsg}`, 'success', config.toastDuration);
-        
-        // Update UI elements based on the loaded configuration
-        updateUIFromConfig(result.config);
-        
-        // Show indicator of which config is active
-        document.getElementById('activeConfigName').textContent = configName;
-        document.getElementById('activeConfigIndicator').classList.remove('hidden');
-      } else {
-        showNotification(result.message || 'Error loading configuration', 'error', config.toastDuration);
-      }
-    })
-    .withFailureHandler(function(error) {
-      showNotification(error.message || 'Error loading configuration', 'error', config.toastDuration);
-    })
-    .loadConfiguration(configName, true); // true = load document content
-}
-
-// Helper function to load config without document content
-function loadConfigWithoutContent(configName) {
-  // Show loading notification
-  showNotification(`Loading configuration "${configName}" settings...`, 'info', config.toastDuration);
-  
-  google.script.run
-    .withSuccessHandler(function(result) {
-      if (result.success) {
-        // Set flag to refresh configurations when returning to sidebar
-        google.script.run.setConfigurationRefreshFlag();
-        
-        showNotification(`Configuration "${configName}" settings loaded`, 'success', config.toastDuration);
-        
-        // Update UI elements based on the loaded configuration
-        updateUIFromConfig(result.config);
-        
-        // Show indicator of which config is active
-        document.getElementById('activeConfigName').textContent = configName;
-        document.getElementById('activeConfigIndicator').classList.remove('hidden');
-      } else {
-        showNotification(result.message || 'Error loading configuration', 'error', config.toastDuration);
-      }
-    })
-    .withFailureHandler(function(error) {
-      showNotification(error.message || 'Error loading configuration', 'error', config.toastDuration);
-    })
-    .loadConfiguration(configName, false); // false = don't load document content
-}
-
-// Function to update UI from configuration
-function updateUIFromConfig(config) {
-  // Log the config for debugging
-  console.log('Updating UI with config:', config);
-  
-  // Set values in UI fields without attempting validation
-  if (config.spreadsheetUrl) {
-    document.getElementById('spreadsheetUrl').value = config.spreadsheetUrl;
-  }
-  
-  // Store sheet and column values that will be used after validation
-  if (config.sheetName) {
-    window.pendingConfiguration = window.pendingConfiguration || {};
-    window.pendingConfiguration.sheetName = config.sheetName;
-  }
-  
-  if (config.emailColumn) {
-    window.pendingConfiguration = window.pendingConfiguration || {};
-    window.pendingConfiguration.emailColumn = config.emailColumn;
-  }
-  
-  // Store CC/BCC values for later
-  if (config.ccColumn) {
-    window.pendingConfiguration = window.pendingConfiguration || {};
-    window.pendingConfiguration.ccColumn = config.ccColumn;
-  }
-  
-  if (config.bccColumn) {
-    window.pendingConfiguration = window.pendingConfiguration || {};
-    window.pendingConfiguration.bccColumn = config.bccColumn;
-  }
-  
-  // Set remaining fields that don't require validation
-  if (config.fromName) {
-    document.getElementById('fromName').value = config.fromName;
-  }
-  
-  if (config.fromEmail) {
-    selectOptionByValue(document.getElementById('fromEmailSelect'), config.fromEmail);
-  }
-  
-  if (config.subjectLine) {
-    document.getElementById('subjectLine').value = config.subjectLine;
-    updateCharCounter();
-  }
-  
-  // Set CC/BCC override fields if they exist
-  if (config.ccOverride && document.getElementById('ccField')) {
-    document.getElementById('ccField').value = config.ccOverride;
-  }
-  
-  if (config.bccOverride && document.getElementById('bccField')) {
-    document.getElementById('bccField').value = config.bccOverride;
-  }
-  
-  // Show validation needed message
-  showNotification('Configuration loaded. Click "Validate Spreadsheet" to continue setup.', 'info', 10000);
-  
-  // Update summary
-  updateSummary();
-  
-  // Show active configuration indicator
-  document.getElementById('activeConfigName').textContent = config.templateName || config.Template || '';
-  document.getElementById('activeConfigIndicator').classList.remove('hidden');
-}
-
-// Clear all fields
-function clearAllFields() {
-  if (confirm('Are you sure you want to reset all fields?')) {
-    // Reset fields
-    document.getElementById('spreadsheetUrl').value = '';
-    document.getElementById('sheetSelect').innerHTML = '<option value="">Select a sheet...</option>';
-    document.getElementById('emailColumnSelect').innerHTML = '<option value="">Select recipients column...</option>';
-    document.getElementById('ccColumnSelect').innerHTML = '<option value="">None (Optional)</option>';
-    document.getElementById('bccColumnSelect').innerHTML = '<option value="">None (Optional)</option>';
-    document.getElementById('subjectLine').value = '';
-    document.getElementById('testEmailAddress').value = '';
+  function loadConfigurationList() {
+    const configSelect = document.getElementById('configSelect');
+    configSelect.innerHTML = '<option value="">Select a configuration...</option>';
     
-    // Hide conditional sections
-    toggleVisibility('sheetSelectGroup', false);
-    toggleVisibility('emailColumnGroup', false);
-    toggleVisibility('ccColumnGroup', false);
-    toggleVisibility('bccColumnGroup', false);
-    toggleVisibility('ccBccToggleGroup', false);
-    toggleVisibility('validationSuccessIndicator', false);
-    toggleVisibility('openSpreadsheetLink', false);
-    
-    // Hide active config indicator
-    document.getElementById('activeConfigIndicator').classList.add('hidden');
-    
-    // Reset dropdown
-    document.getElementById('configSelect').value = '';
-    
-    // Reset data
-    spreadsheetData = {
-      id: '',
-      name: '',
-      url: '',
-      sheetName: '',
-      columnHeaders: [],
-      emailColumn: '',
-      ccColumn: '',
-      bccColumn: '',
-      validationResults: null,
-      recipientCount: 0
-    };
-    
-    // Update UI
-    updateCharCounter();
-    updateSummary();
-    
-    showNotification('All fields reset', 'info', config.toastDuration);
-  }
-}
-
-// Helper to select option by value
-function selectOptionByValue(selectElement, value) {
-  if (!selectElement) return false;
-  
-  for (let i = 0; i < selectElement.options.length; i++) {
-    if (selectElement.options[i].value === value) {
-      selectElement.selectedIndex = i;
-      // Trigger change event
-      const event = new Event('change');
-      selectElement.dispatchEvent(event);
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-// Check if configurations need refreshing (when returning from dialog)
-function setupConfigurationRefreshCheck() {
-  // Check when window regains focus (likely coming back from dialog)
-  window.addEventListener('focus', function() {
     google.script.run
-      .withSuccessHandler(function(needsRefresh) {
-        if (needsRefresh) {
-          console.log('Configurations updated, refreshing list...');
-          loadConfigurationList();
+      .withSuccessHandler(function(configs) {
+        window.availableConfigs = configs; // Store for later use
+        
+        if (configs && Object.keys(configs).length > 0) {
+          for (const name in configs) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            configSelect.appendChild(option);
+          }
+          
+          showNotification('Configuration list refreshed', 'info', config.toastDuration);
+        } else {
+          showNotification('No saved configurations found', 'info', config.toastDuration);
         }
       })
-      .checkConfigurationsNeedRefresh();
-  });
-}
+      .withFailureHandler(function(error) {
+        showNotification('Error loading configurations: ' + error.message, 'error', config.toastDuration);
+      })
+      .getAvailableConfigurations();
+  }
 
-// Add this to the document.addEventListener('DOMContentLoaded', function() { section:
-document.addEventListener('DOMContentLoaded', function() {
-  try {
-    console.log('DOM Content Loaded - Initializing UI');
+  // Load selected configuration into the UI fields
+  function loadSelectedConfig() {
+    const configName = document.getElementById('configSelect').value;
+    if (!configName) {
+      showNotification('Please select a configuration', 'error', config.toastDuration);
+      return;
+    }
     
-    // Load configuration list
-    loadConfigurationList();
+    const selectedConfig = window.availableConfigs[configName];
+    if (!selectedConfig) {
+      showNotification('Configuration not found', 'error', config.toastDuration);
+      return;
+    }
     
-    // Load sender emails
-    loadSenderEmails();
+    // Show loading notification
+    showNotification(`Loading configuration "${configName}" settings...`, 'info', config.toastDuration);
     
-    // Load quota info when the page loads (with a small delay to ensure UI elements are ready)
-    setTimeout(loadQuotaInfo, 500);
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          // Set flag to refresh configurations when returning to sidebar
+          google.script.run.setConfigurationRefreshFlag();
+          
+          showNotification(`Configuration "${configName}" settings loaded`, 'success', config.toastDuration);
+          
+          // Update UI elements based on the loaded configuration
+          updateUIFromConfig(result.config);
+          
+          // Show indicator of which config is active
+          document.getElementById('activeConfigName').textContent = configName;
+          document.getElementById('activeConfigIndicator').classList.remove('hidden');
+        } else {
+          showNotification(result.message || 'Error loading configuration', 'error', config.toastDuration);
+        }
+      })
+      .withFailureHandler(function(error) {
+        showNotification(error.message || 'Error loading configuration', 'error', config.toastDuration);
+      })
+      .loadConfiguration(configName, false); // false = don't load document content
+  }
+
+  // Function to update UI from configuration - updated to use new field names
+  function updateUIFromConfig(config) {
+    // Log the config for debugging
+    console.log('Updating UI with config:', config);
     
-    // Set up event listeners
-    const setupEventListener = function(id, event, handler) {
-      const element = document.getElementById(id);
-      if (element) {
-        element.addEventListener(event, handler);
-      } else {
-        console.warn(`Element with ID "${id}" not found for event binding`);
-      }
-    };
+    // Set values in UI fields without attempting validation
+    if (config.spreadsheetUrl) {
+      document.getElementById('spreadsheetUrl').value = config.spreadsheetUrl;
+    }
     
-    setupEventListener('subjectLine', 'input', function() {
+    // Store sheet and column values that will be used after validation
+    if (config.sheetName) {
+      window.pendingConfiguration = window.pendingConfiguration || {};
+      window.pendingConfiguration.sheetName = config.sheetName;
+    }
+    
+    if (config.emailColumn) {
+      window.pendingConfiguration = window.pendingConfiguration || {};
+      window.pendingConfiguration.emailColumn = config.emailColumn;
+    }
+    
+    // Store CC/BCC values for later
+    if (config.ccColumn) {
+      window.pendingConfiguration = window.pendingConfiguration || {};
+      window.pendingConfiguration.ccColumn = config.ccColumn;
+    }
+    
+    if (config.bccColumn) {
+      window.pendingConfiguration = window.pendingConfiguration || {};
+      window.pendingConfiguration.bccColumn = config.bccColumn;
+    }
+    
+    // Set remaining fields that don't require validation
+    // Note: The backend uses 'senderDisplayName', but the UI still uses 'fromName'
+    // for backward compatibility
+    if (config.fromName) {
+      document.getElementById('fromName').value = config.fromName;
+    }
+    
+    if (config.fromEmail) {
+      selectOptionByValue(document.getElementById('fromEmailSelect'), config.fromEmail);
+    }
+    
+    if (config.subjectLine) {
+      document.getElementById('subjectLine').value = config.subjectLine;
+      updateCharCounter();
+    }
+    
+    // Set CC/BCC override fields if they exist
+    if (config.ccOverride && document.getElementById('ccField')) {
+      document.getElementById('ccField').value = config.ccOverride;
+    }
+    
+    if (config.bccOverride && document.getElementById('bccField')) {
+      document.getElementById('bccField').value = config.bccOverride;
+    }
+    
+    // Show validation needed message
+    showNotification('Configuration loaded. Click "Validate Spreadsheet" to continue setup.', 'info', 10000);
+    
+    // Update summary
+    updateSummary();
+    
+    // Show active configuration indicator
+    document.getElementById('activeConfigName').textContent = config.templateName || '';
+    document.getElementById('activeConfigIndicator').classList.remove('hidden');
+  }
+
+  // Clear all fields
+  function clearAllFields() {
+    if (confirm('Are you sure you want to reset all fields?')) {
+      // Reset fields
+      document.getElementById('spreadsheetUrl').value = '';
+      document.getElementById('sheetSelect').innerHTML = '<option value="">Select a sheet...</option>';
+      document.getElementById('emailColumnSelect').innerHTML = '<option value="">Select recipients column...</option>';
+      document.getElementById('ccColumnSelect').innerHTML = '<option value="">None (Optional)</option>';
+      document.getElementById('bccColumnSelect').innerHTML = '<option value="">None (Optional)</option>';
+      document.getElementById('subjectLine').value = '';
+      document.getElementById('testEmailAddress').value = '';
+      
+      // Hide conditional sections
+      toggleVisibility('sheetSelectGroup', false);
+      toggleVisibility('emailColumnGroup', false);
+      toggleVisibility('ccColumnGroup', false);
+      toggleVisibility('bccColumnGroup', false);
+      toggleVisibility('ccBccToggleGroup', false);
+      toggleVisibility('validationStatusGroup', false);
+      toggleVisibility('loadSheetsGroup', false);
+      toggleVisibility('loadColumnsGroup', false);
+      toggleVisibility('openSpreadsheetLink', false);
+      
+      // Hide active config indicator
+      document.getElementById('activeConfigIndicator').classList.add('hidden');
+      
+      // Reset dropdown
+      document.getElementById('configSelect').value = '';
+      
+      // Reset data
+      spreadsheetData = {
+        id: '',
+        name: '',
+        url: '',
+        sheetName: '',
+        columnHeaders: [],
+        emailColumn: '',
+        ccColumn: '',
+        bccColumn: '',
+        validationResults: null,
+        recipientCount: 0
+      };
+      
+      // Update UI
       updateCharCounter();
       updateSummary();
-    });
-    
-    setupEventListener('fromEmailSelect', 'change', updateSummary);
-    setupEventListener('fromName', 'input', updateSummary);
-    setupEventListener('emailColumnSelect', 'change', updateSummary);
-    
-    // Add listener for spreadsheet URL to enable real-time validation feedback
-    setupEventListener('spreadsheetUrl', 'input', validateSpreadsheetRealtime);
-    
-    // Initialize character counter
-    updateCharCounter();
-    
-    // Set initial tooltip state
-    toggleTooltips(config.showTooltips);
-    
-    // Add keyboard accessibility for placeholder items
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        if (e.target.hasAttribute('role') && e.target.getAttribute('role') === 'button') {
-          e.preventDefault();
-          e.target.click();
-        }
-      }
-    });
-    
-    // Setup check for configuration updates
-    setupConfigurationRefreshCheck();
-    
-    console.log('UI initialization completed');
-  } catch (error) {
-    console.error('Error during initialization:', error);
-    alert('There was an error initializing the UI. Please reload the page.');
+      
+      showNotification('All fields reset', 'info', config.toastDuration);
+    }
   }
-});
+
+  // Helper to select option by value
+  function selectOptionByValue(selectElement, value) {
+    if (!selectElement) return false;
+    
+    for (let i = 0; i < selectElement.options.length; i++) {
+      if (selectElement.options[i].value === value) {
+        selectElement.selectedIndex = i;
+        // Trigger change event
+        const event = new Event('change');
+        selectElement.dispatchEvent(event);
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  // Helper function to show a notification
+  function showNotification(message, type, duration) {
+    // Create notification element
+    const notificationDiv = document.createElement('div');
+    notificationDiv.className = 'alert alert-' + (type || 'info');
+    notificationDiv.style.position = 'fixed';
+    notificationDiv.style.top = '10px';
+    notificationDiv.style.left = '50%';
+    notificationDiv.style.transform = 'translateX(-50%)';
+    notificationDiv.style.zIndex = '1000';
+    notificationDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+    notificationDiv.style.maxWidth = '280px';
+    notificationDiv.style.wordWrap = 'break-word';
+    notificationDiv.setAttribute('role', 'alert');
+    
+    // Set icon based on type
+    let icon = '⚠';
+    if (type === 'success') icon = '✓';
+    if (type === 'error') icon = '✗';
+    if (type === 'info') icon = 'ℹ';
+    
+    // Add spinner for loading notifications
+    if (duration === 0) {
+      icon = '<span class="spinner" style="width: 14px; height: 14px;"></span>';
+    }
+    
+    // Create notification content
+    notificationDiv.innerHTML = `
+      <div style="display: flex; align-items: center;">
+        <div class="alert-icon">${icon}</div>
+        <div>${message}</div>
+      </div>
+    `;
+    
+    // Add to document
+    document.body.appendChild(notificationDiv);
+    
+    // Remove after duration if specified
+    if (duration > 0) {
+      setTimeout(function() {
+        notificationDiv.style.opacity = '0';
+        notificationDiv.style.transition = 'opacity 0.5s';
+        setTimeout(function() {
+          if (notificationDiv.parentNode) {
+            document.body.removeChild(notificationDiv);
+          }
+        }, 500);
+      }, duration);
+    }
+    
+    return notificationDiv;
+  }
+
+  // Check if configurations need refreshing (when returning from dialog)
+  function setupConfigurationRefreshCheck() {
+    // Check when window regains focus (likely coming back from dialog)
+    window.addEventListener('focus', function() {
+      google.script.run
+        .withSuccessHandler(function(needsRefresh) {
+          if (needsRefresh) {
+            console.log('Configurations updated, refreshing list...');
+            loadConfigurationList();
+          }
+        })
+        .checkConfigurationsNeedRefresh();
+    });
+  }
+
+  // Add this to the document.addEventListener('DOMContentLoaded', function() { section:
+  document.addEventListener('DOMContentLoaded', function() {
+    try {
+      console.log('DOM Content Loaded - Initializing UI');
+      
+      // Load configuration list
+      loadConfigurationList();
+      
+      // Load sender emails
+      loadSenderEmails();
+      
+      // Load quota info when the page loads (with a small delay to ensure UI elements are ready)
+      setTimeout(loadQuotaInfo, 500);
+      
+      // Set up event listeners
+      const setupEventListener = function(id, event, handler) {
+        const element = document.getElementById(id);
+        if (element) {
+          element.addEventListener(event, handler);
+        } else {
+          console.warn(`Element with ID "${id}" not found for event binding`);
+        }
+      };
+      
+      setupEventListener('subjectLine', 'input', function() {
+        updateCharCounter();
+        updateSummary();
+      });
+      
+      setupEventListener('fromEmailSelect', 'change', updateSummary);
+      setupEventListener('fromName', 'input', updateSummary);
+      setupEventListener('emailColumnSelect', 'change', updateSummary);
+      
+      // Add event listeners for CC/BCC dropdowns
+      setupEventListener('ccColumnSelect', 'change', updateSummary);
+      setupEventListener('bccColumnSelect', 'change', updateSummary);
+      
+      // Initialize character counter
+      updateCharCounter();
+      
+      // Set initial tooltip state
+      toggleTooltips(config.showTooltips);
+      
+      // Add keyboard accessibility for placeholder items
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target.hasAttribute('role') && e.target.getAttribute('role') === 'button') {
+            e.preventDefault();
+            e.target.click();
+          }
+        }
+      });
+      
+      // Setup check for configuration updates
+      setupConfigurationRefreshCheck();
+      
+      console.log('UI initialization completed');
+    } catch (error) {
+      console.error('Error during initialization:', error);
+      alert('There was an error initializing the UI. Please reload the page.');
+    }
+  });
 </script>
