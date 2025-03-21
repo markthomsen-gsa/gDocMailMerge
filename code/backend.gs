@@ -469,11 +469,14 @@ function extractConfigFromTable(table) {
   const config = {};
   const startRow = table.getCell(0, 0).getText().trim() === "Attribute Name" ? 1 : 0;
   
-  // Create a mapping of display names to field names
+  // Create mapping of display names to field names
   const displayToFieldMap = {};
   for (const [fieldName, fieldConfig] of Object.entries(TEMPLATE_FIELDS)) {
     displayToFieldMap[fieldConfig.displayName] = fieldName;
   }
+  
+  // Debug with Logger instead of console.log
+  Logger.log("Extracting configuration from table");
   
   for (let i = startRow; i < table.getNumRows(); i++) {
     const row = table.getRow(i);
@@ -485,18 +488,71 @@ function extractConfigFromTable(table) {
     if (!attributeCell || !valueCell) continue;
     
     const displayName = attributeCell.getText().trim();
-    const value = valueCell.getText().trim();
+    let value = valueCell.getText().trim();
     
     // Skip empty attribute names and placeholder values
     if (!displayName || (value.startsWith('[') && value.endsWith(']'))) continue;
     
-    // Convert display name to field name
-    const fieldName = displayToFieldMap[displayName];
-    if (fieldName) {
-      config[fieldName] = value;
+    // Special handling for Spreadsheet field to support URL chips
+    if (displayName === "Spreadsheet") {
+      try {
+        // Get raw text first as a fallback
+        let rawValue = value;
+        
+        // Try to get the URL from rich text format if it's a chip
+        const richText = valueCell.getRichTextValue();
+        if (richText) {
+          // Check for URL in any text runs
+          const runs = richText.getRuns();
+          for (const run of runs) {
+            const linkUrl = run.getLinkUrl();
+            if (linkUrl) {
+              // Use the URL from the chip
+              rawValue = linkUrl;
+              Logger.log("Found URL in chip: " + rawValue);
+              break;
+            }
+          }
+        }
+        
+        // Store the raw value first (important!)
+        const fieldName = displayToFieldMap[displayName];
+        if (fieldName) {
+          config[fieldName] = rawValue;
+        }
+        
+        // Also try to extract ID - but keep original value if this fails
+        try {
+          const spreadsheetId = extractSpreadsheetId(rawValue);
+          if (spreadsheetId && spreadsheetId.length > 10) { // Reasonable ID length check
+            // Only override if we got a valid-looking ID
+            config[fieldName] = spreadsheetId;
+            Logger.log("Extracted ID: " + spreadsheetId);
+          }
+        } catch (idError) {
+          Logger.log("ID extraction error: " + idError.message);
+          // Keep the original value - already saved above
+        }
+      } catch (e) {
+        // If there's any error in rich text handling, log it but keep going
+        Logger.log("Error handling rich text: " + e.message);
+        
+        // Make sure we still save something
+        const fieldName = displayToFieldMap[displayName];
+        if (fieldName && value) {
+          config[fieldName] = value;
+          Logger.log("Using fallback text value: " + value);
+        }
+      }
     } else {
-      // For backward compatibility, store by display name
-      config[displayName] = value;
+      // Standard handling for other fields
+      const fieldName = displayToFieldMap[displayName];
+      if (fieldName) {
+        config[fieldName] = value;
+      } else {
+        // For backward compatibility, store by display name
+        config[displayName] = value;
+      }
     }
   }
   

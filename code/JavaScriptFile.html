@@ -29,6 +29,17 @@
     showTooltips: true
   };
   
+  // Debounce helper function
+  function debounce(func, wait) {
+    let timeout;
+    return function() {
+      const context = this;
+      const args = arguments;
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+  }
+
   // Function to toggle sections open/closed
   function toggleSection(sectionId) {
     // Get all sections
@@ -1483,10 +1494,10 @@
     return notificationDiv;
   }
 
-  // Check if configurations need refreshing (when returning from dialog)
+  
   function setupConfigurationRefreshCheck() {
-    // Check when window regains focus (likely coming back from dialog)
-    window.addEventListener('focus', function() {
+    // Create debounced version of load function
+    const debouncedLoadConfig = debounce(function() {
       google.script.run
         .withSuccessHandler(function(needsRefresh) {
           if (needsRefresh) {
@@ -1495,7 +1506,10 @@
           }
         })
         .checkConfigurationsNeedRefresh();
-    });
+    }, 300); // 300ms debounce time
+    
+    // Check when window regains focus
+    window.addEventListener('focus', debouncedLoadConfig);
   }
 
   // Add this to the document.addEventListener('DOMContentLoaded', function() { section:
