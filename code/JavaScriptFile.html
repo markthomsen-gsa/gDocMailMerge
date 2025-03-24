@@ -1,16 +1,16 @@
 <script>
   // Global variables
   let spreadsheetData = {
-    id: '',
-    name: '',
-    url: '', // Added url property for direct access
-    sheetName: '',
-    columnHeaders: [],
-    emailColumn: '',
-    ccColumn: '',
-    bccColumn: '',
-    validationResults: null,
-    recipientCount: 0
+    id: '',              // Spreadsheet ID (used internally only)
+    name: '',            // Name of the spreadsheet
+    url: '',             // Complete spreadsheet URL as entered by user
+    sheetName: '',       // Selected sheet name
+    columnHeaders: [],   // Array of column headers from selected sheet
+    emailColumn: '',     // Column containing recipient email addresses
+    ccColumn: '',        // Column containing CC addresses (optional)
+    bccColumn: '',       // Column containing BCC addresses (optional)
+    validationResults: null, // Results of validation operations
+    recipientCount: 0    // Number of recipients found in email column
   };
   
   // Global variable to store quota information (with safe defaults)
@@ -27,6 +27,14 @@
     subjectWarningThreshold: 0.8, // Show warning at 80% of limit
     toastDuration: 5000,
     showTooltips: true
+  };
+  
+  // Validation levels
+  const ValidationLevel = {
+    NONE: 0,
+    BASIC: 1,   // Spreadsheet validated
+    TEST: 2,    // Sheet selected
+    FULL: 3     // Email column selected and recipients found
   };
   
   // Debounce helper function
@@ -274,6 +282,119 @@
     }
   }
   
+  // Helper function to check validation level and update UI
+  function getValidationLevel() {
+    if (!spreadsheetData.id || !spreadsheetData.url) {
+      return ValidationLevel.NONE;
+    }
+    
+    if (!spreadsheetData.sheetName) {
+      return ValidationLevel.BASIC;
+    }
+    
+    if (!spreadsheetData.emailColumn || spreadsheetData.recipientCount <= 0) {
+      return ValidationLevel.TEST;
+    }
+    
+    return ValidationLevel.FULL;
+  }
+  
+  // Update button states based on validation level
+  function updateButtonStates() {
+    const level = getValidationLevel();
+    
+    // Update send test email button
+    const sendPreviewBtn = document.getElementById('sendPreviewBtn');
+    if (sendPreviewBtn) {
+      sendPreviewBtn.disabled = level < ValidationLevel.TEST;
+    }
+    
+    // Update send emails button
+    const executeBtn = document.getElementById('executeBtn');
+    if (executeBtn) {
+      executeBtn.disabled = level < ValidationLevel.FULL;
+    }
+    
+    // Update spreadsheet info display
+    updateSpreadsheetInfoDisplay();
+  }
+  
+  // Function to update spreadsheet info display
+  function updateSpreadsheetInfoDisplay() {
+    const infoBox = document.getElementById('spreadsheetInfoBox');
+    if (!infoBox) return;
+    
+    if (!spreadsheetData.url) {
+      infoBox.classList.add('hidden');
+      return;
+    }
+    
+    // Show info box
+    infoBox.classList.remove('hidden');
+    
+    // Update spreadsheet name
+    const nameEl = document.getElementById('spreadsheetName');
+    if (nameEl) {
+      nameEl.textContent = spreadsheetData.name || 'Unknown Spreadsheet';
+    }
+    
+    // Update spreadsheet URL (truncated for display)
+    const urlEl = document.getElementById('spreadsheetUrl');
+    if (urlEl) {
+      const displayUrl = spreadsheetData.url.length > 40 ? 
+                         spreadsheetData.url.substring(0, 37) + '...' : 
+                         spreadsheetData.url;
+      urlEl.textContent = displayUrl;
+      urlEl.title = spreadsheetData.url;
+      urlEl.href = spreadsheetData.url;
+    }
+    
+    // Update sheet name if available
+    const sheetEl = document.getElementById('spreadsheetSheet');
+    if (sheetEl) {
+      if (spreadsheetData.sheetName) {
+        sheetEl.textContent = spreadsheetData.sheetName;
+        sheetEl.classList.remove('hidden');
+      } else {
+        sheetEl.classList.add('hidden');
+      }
+    }
+    
+    // Update validation status
+    const validationLevelEl = document.getElementById('validationLevel');
+    if (validationLevelEl) {
+      const level = getValidationLevel();
+      let statusText, statusClass;
+      
+      switch(level) {
+        case ValidationLevel.NONE:
+          statusText = 'Not Validated';
+          statusClass = 'status-none';
+          break;
+        case ValidationLevel.BASIC:
+          statusText = 'Basic Validation';
+          statusClass = 'status-basic';
+          break;
+        case ValidationLevel.TEST:
+          statusText = 'Test Ready';
+          statusClass = 'status-test';
+          break;
+        case ValidationLevel.FULL:
+          statusText = 'Ready to Send';
+          statusClass = 'status-full';
+          break;
+      }
+      
+      validationLevelEl.textContent = statusText;
+      
+      // Remove all status classes
+      validationLevelEl.classList.remove('status-none', 'status-basic', 'status-test', 'status-full');
+      
+      // Add current status class
+      validationLevelEl.classList.add(statusClass);
+    }
+  }
+
   // Function to validate spreadsheet
   function validateSpreadsheet() {
     const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
@@ -281,6 +402,9 @@
       showNotification('Please enter a spreadsheet URL or ID', 'error', config.toastDuration);
       return;
     }
+    
+    // Store the full URL in spreadsheetData
+    spreadsheetData.url = spreadsheetUrl;
     
     // Show loading state
     const validateBtn = document.getElementById('validateBtn');
@@ -307,22 +431,26 @@
         
         // Handle successful validation
         if (result.success) {
-          // Store the spreadsheet data
+          // Store the spreadsheet data (ID internally, URL preserved)
           spreadsheetData.id = result.id;
           spreadsheetData.name = result.name;
-          spreadsheetData.url = spreadsheetUrl;
           
           // Show notification for successful validation
-          showNotification('Spreadsheet successfully validated', 'success', config.toastDuration);
+          showNotification(`Spreadsheet "${result.name}" successfully validated`, 'success', config.toastDuration);
           
-          // Show the Load Sheets button and spreadsheet link
+          // Show the Load Sheets button and spreadsheet info
           toggleVisibility('loadSheetsGroup', true);
-          toggleVisibility('openSpreadsheetLink', true);
+          
+          // Update spreadsheet info display
+          updateSpreadsheetInfoDisplay();
           
           // Apply pending configuration if this is after loading a config
           if (window.pendingConfiguration && window.pendingConfiguration.sheetName) {
             showNotification('Continue by clicking "Load Sheets"', 'info', config.toastDuration);
           }
+          
+          // Update button states
+          updateButtonStates();
         } else {
           showNotification(result.message || 'Error validating spreadsheet', 'error', config.toastDuration);
         }
@@ -425,6 +553,12 @@
         
         // Show the Load Columns button
         toggleVisibility('loadColumnsGroup', true);
+        
+        // Update spreadsheet info display
+        updateSpreadsheetInfoDisplay();
+        
+        // Update button states
+        updateButtonStates();
       } else {
         toggleVisibility('loadColumnsGroup', false);
       }
@@ -530,6 +664,9 @@
           // Show a message that setup is complete
           showNotification('Configuration setup complete. You can now send emails.', 'success', config.toastDuration);
         }
+        
+        // Update button states
+        updateButtonStates();
       })
       .withFailureHandler(function(error) {
         // Remove loading notification
@@ -682,19 +819,8 @@
       return;
     }
     
-    google.script.run
-      .withSuccessHandler(function(result) {
-        if (result.success && result.url) {
-          // Open the URL in a new tab
-          window.open(result.url, '_blank');
-        } else {
-          showNotification('Error opening spreadsheet', 'error', config.toastDuration);
-        }
-      })
-      .withFailureHandler(function(error) {
-        showNotification('Error: ' + (error.message || 'Could not open spreadsheet'), 'error', config.toastDuration);
-      })
-      .openSpreadsheet(spreadsheetData.url);
+    // Open the original URL directly in a new tab
+    window.open(spreadsheetData.url, '_blank');
   }
 
   // Function to update the recipient count when email column changes
@@ -707,6 +833,9 @@
       }
       return;
     }
+    
+    // Store the selected email column
+    spreadsheetData.emailColumn = emailColumn;
     
     // Show loading state
     const summaryRecipientCount = document.getElementById('summaryRecipientCount');
@@ -729,6 +858,9 @@
         
         // Add toast notification for recipient count
         showNotification(`Found ${count} potential recipients in the "${emailColumn}" column`, 'info', config.toastDuration);
+        
+        // Update validation level and button states
+        updateButtonStates();
       })
       .withFailureHandler(function(error) {
         // Show error
@@ -757,8 +889,9 @@
       return;
     }
     
+    // Validate minimum requirements for test email
     if (!spreadsheetData.id || !spreadsheetData.sheetName) {
-      showNotification('Please select a spreadsheet and sheet first', 'error', config.toastDuration);
+      showNotification('Please validate spreadsheet and select a sheet first', 'error', config.toastDuration);
       return;
     }
     
@@ -1057,6 +1190,101 @@
     toggleVisibility('mergeResults', true);
   }
   
+  // Function to synchronize UI with spreadsheetData
+  function syncUIWithData() {
+    // Update spreadsheet URL field
+    const spreadsheetUrlField = document.getElementById('spreadsheetUrl');
+    if (spreadsheetUrlField && spreadsheetData.url) {
+      spreadsheetUrlField.value = spreadsheetData.url;
+    }
+    
+    // Update sheet select if available
+    if (spreadsheetData.sheetName) {
+      const sheetSelect = document.getElementById('sheetSelect');
+      if (sheetSelect) {
+        // If sheet options aren't loaded yet, we'll handle this in pendingConfiguration
+        if (sheetSelect.options.length > 1) {
+          selectOptionByValue(sheetSelect, spreadsheetData.sheetName);
+        }
+      }
+    }
+    
+    // Update email column select if available
+    if (spreadsheetData.emailColumn) {
+      const emailColumnSelect = document.getElementById('emailColumnSelect');
+      if (emailColumnSelect) {
+        // If column options aren't loaded yet, we'll handle this in pendingConfiguration
+        if (emailColumnSelect.options.length > 1) {
+          selectOptionByValue(emailColumnSelect, spreadsheetData.emailColumn);
+        }
+      }
+    }
+    
+    // Update CC/BCC columns if available
+    if (spreadsheetData.ccColumn) {
+      const ccColumnSelect = document.getElementById('ccColumnSelect');
+      if (ccColumnSelect && ccColumnSelect.options.length > 1) {
+        selectOptionByValue(ccColumnSelect, spreadsheetData.ccColumn);
+      }
+    }
+    
+    if (spreadsheetData.bccColumn) {
+      const bccColumnSelect = document.getElementById('bccColumnSelect');
+      if (bccColumnSelect && bccColumnSelect.options.length > 1) {
+        selectOptionByValue(bccColumnSelect, spreadsheetData.bccColumn);
+      }
+    }
+    
+    // Show/hide load buttons as needed
+    if (spreadsheetData.id) {
+      toggleVisibility('loadSheetsGroup', true);
+    }
+    
+    if (spreadsheetData.sheetName) {
+      toggleVisibility('loadColumnsGroup', true);
+    }
+    
+    // Update spreadsheet info display
+    updateSpreadsheetInfoDisplay();
+    
+    // Update validation state and buttons
+    updateButtonStates();
+  }
+  
+  // Function to update spreadsheetData from UI
+  function updateDataFromUI() {
+    // Get values from UI
+    const spreadsheetUrl = document.getElementById('spreadsheetUrl').value.trim();
+    const sheetName = document.getElementById('sheetSelect').value;
+    const emailColumn = document.getElementById('emailColumnSelect').value;
+    const ccColumn = document.getElementById('ccColumnSelect').value;
+    const bccColumn = document.getElementById('bccColumnSelect').value;
+    
+    // Update spreadsheetData
+    spreadsheetData.url = spreadsheetUrl;
+    
+    // Don't update ID here - that happens via validation
+    
+    if (sheetName) {
+      spreadsheetData.sheetName = sheetName;
+    }
+    
+    if (emailColumn) {
+      spreadsheetData.emailColumn = emailColumn;
+    }
+    
+    if (ccColumn) {
+      spreadsheetData.ccColumn = ccColumn;
+    }
+    
+    if (bccColumn) {
+      spreadsheetData.bccColumn = bccColumn;
+    }
+    
+    // Update validation state and buttons
+    updateButtonStates();
+  }
+  
   // Function to load sender emails with better error handling
   function loadSenderEmails() {
     // Show loading notification
@@ -1264,7 +1492,7 @@
       .getAvailableConfigurations();
   }
 
-  // Load selected configuration into the UI fields
+  // Load selected configuration into the UI fields and spreadsheetData
   function loadSelectedConfig() {
     const configName = document.getElementById('configSelect').value;
     if (!configName) {
@@ -1295,6 +1523,9 @@
           // Show indicator of which config is active
           document.getElementById('activeConfigName').textContent = configName;
           document.getElementById('activeConfigIndicator').classList.remove('hidden');
+          
+          // Validate the loaded configuration
+          validateLoadedConfiguration(result.config);
         } else {
           showNotification(result.message || 'Error loading configuration', 'error', config.toastDuration);
         }
@@ -1305,10 +1536,30 @@
       .loadConfiguration(configName, false); // false = don't load document content
   }
 
-  // Function to update UI from configuration - updated to use new field names
+  // Function to validate a loaded configuration
+  function validateLoadedConfiguration(config) {
+    // Skip if no configuration
+    if (!config) return;
+    
+    // Show "validating configuration" message
+    showNotification('Validating configuration settings...', 'info', config.toastDuration);
+    
+    // Store spreadsheet info - validation will be done automatically once this is set
+    if (config.spreadsheetUrl) {
+      spreadsheetData.url = config.spreadsheetUrl;
+    }
+  }
+
+  // Function to update UI from configuration - updated to also update spreadsheetData
   function updateUIFromConfig(config) {
     // Log the config for debugging
     console.log('Updating UI with config:', config);
+    
+    // Update spreadsheetData directly - keeping original URL
+    spreadsheetData.url = config.spreadsheetUrl || '';
+    
+    // The ID will be extracted internally during validation
+    // We'll handle the rest in pendingConfiguration
     
     // Set values in UI fields without attempting validation
     if (config.spreadsheetUrl) {
@@ -1319,22 +1570,34 @@
     if (config.sheetName) {
       window.pendingConfiguration = window.pendingConfiguration || {};
       window.pendingConfiguration.sheetName = config.sheetName;
+      
+      // Also store in spreadsheetData for future use
+      spreadsheetData.sheetName = config.sheetName;
     }
     
     if (config.emailColumn) {
       window.pendingConfiguration = window.pendingConfiguration || {};
       window.pendingConfiguration.emailColumn = config.emailColumn;
+      
+      // Also store in spreadsheetData for future use
+      spreadsheetData.emailColumn = config.emailColumn;
     }
     
     // Store CC/BCC values for later
     if (config.ccColumn) {
       window.pendingConfiguration = window.pendingConfiguration || {};
       window.pendingConfiguration.ccColumn = config.ccColumn;
+      
+      // Also store in spreadsheetData for future use
+      spreadsheetData.ccColumn = config.ccColumn;
     }
     
     if (config.bccColumn) {
       window.pendingConfiguration = window.pendingConfiguration || {};
       window.pendingConfiguration.bccColumn = config.bccColumn;
+      
+      // Also store in spreadsheetData for future use
+      spreadsheetData.bccColumn = config.bccColumn;
     }
     
     // Set remaining fields that don't require validation
@@ -1371,6 +1634,11 @@
     // Show active configuration indicator
     document.getElementById('activeConfigName').textContent = config.templateName || '';
     document.getElementById('activeConfigIndicator').classList.remove('hidden');
+    
+    // Trigger spreadsheet validation if URL is set
+    if (config.spreadsheetUrl) {
+      validateSpreadsheet();
+    }
   }
 
   // Clear all fields
@@ -1394,7 +1662,6 @@
       toggleVisibility('validationStatusGroup', false);
       toggleVisibility('loadSheetsGroup', false);
       toggleVisibility('loadColumnsGroup', false);
-      toggleVisibility('openSpreadsheetLink', false);
       
       // Hide active config indicator
       document.getElementById('activeConfigIndicator').classList.add('hidden');
@@ -1419,6 +1686,10 @@
       // Update UI
       updateCharCounter();
       updateSummary();
+      updateSpreadsheetInfoDisplay();
+      
+      // Update button states
+      updateButtonStates();
       
       showNotification('All fields reset', 'info', config.toastDuration);
     }
@@ -1548,6 +1819,12 @@
       // Add event listeners for CC/BCC dropdowns
       setupEventListener('ccColumnSelect', 'change', updateSummary);
       setupEventListener('bccColumnSelect', 'change', updateSummary);
+      
+      // Add event listener for spreadsheet URL
+      setupEventListener('spreadsheetUrl', 'blur', function() {
+        // Update spreadsheetData URL on blur
+        spreadsheetData.url = this.value.trim();
+      });
       
       // Initialize character counter
       updateCharCounter();

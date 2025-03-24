@@ -921,7 +921,7 @@ function rebuildTemplateDocument(config, emailContent) {
 
 /**
  * Converts a template configuration to the format used by the UI.
- * Updated to handle new field names.
+ * Updated to preserve full URLs.
  * @param {Object} template - The template configuration
  * @return {Object} Configuration compatible with the UI
  */
@@ -1134,33 +1134,72 @@ function formatNameFromEmail(namePart) {
 
 /**
  * Extracts a spreadsheet ID from a URL or returns the ID directly.
- * @param {string} spreadsheetUrl - The spreadsheet URL or ID.
- * @return {string} The extracted spreadsheet ID.
+ * @param {string} input - The spreadsheet URL or ID
+ * @return {SpreadsheetReference} Object with both id and url
  */
-function extractSpreadsheetId(spreadsheetUrl) {
-  if (/^[a-zA-Z0-9_-]{40,}$/.test(spreadsheetUrl)) {
-    return spreadsheetUrl;
+function extractSpreadsheetId(input) {
+  // Store original input for UI display
+  const originalUrl = input;
+  let id = input;
+  
+  // Check if it's already an ID format
+  if (/^[a-zA-Z0-9_-]{40,}$/.test(input)) {
+    // It's already an ID
+    return {
+      id: input,
+      url: originalUrl
+    };
   }
-  const matches = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  
+  // Extract ID from typical Google Sheets URL formats
+  const matches = input.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (matches && matches[1]) {
-    return matches[1];
+    id = matches[1];
   }
-  return spreadsheetUrl;
+  
+  return {
+    id: id,
+    url: originalUrl
+  };
 }
 
 /**
- * Validates a spreadsheet ID/URL by trying to open it.
- * @param {string} spreadsheetUrl - The spreadsheet URL or ID.
- * @return {Object} Validation result with success flag and ID if successful.
+ * Helper function to safely get the ID from any input type
+ * @param {string|SpreadsheetReference} input - Either a string ID/URL or a reference object
+ * @return {string} The clean spreadsheet ID
+ */
+function getSpreadsheetId(input) {
+  if (!input) return null;
+  
+  // If it's already a string, extract the ID
+  if (typeof input === 'string') {
+    return extractSpreadsheetId(input).id;
+  }
+  
+  // If it's a SpreadsheetReference object, return the id property
+  if (typeof input === 'object' && input.id) {
+    return input.id;
+  }
+  
+  // Fallback
+  return String(input);
+}
+
+/**
+ * Validates a spreadsheet and returns metadata
+ * @param {string} spreadsheetUrl - The URL or ID as entered by user
+ * @return {Object} Validation result with success flag and metadata
  */
 function validateSpreadsheet(spreadsheetUrl) {
   try {
-    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    const reference = extractSpreadsheetId(spreadsheetUrl);
+    const spreadsheet = SpreadsheetApp.openById(reference.id);
+    
     return {
       success: true,
-      id: spreadsheetId,
-      name: spreadsheet.getName()
+      id: reference.id,
+      name: spreadsheet.getName(),
+      url: reference.url
     };
   } catch (e) {
     return {
@@ -1171,13 +1210,22 @@ function validateSpreadsheet(spreadsheetUrl) {
 }
 
 /**
- * Gets the list of sheets from a spreadsheet.
- * @param {string} spreadsheetId - The ID of the spreadsheet.
+ * Gets the sheet names from a spreadsheet.
+ * Modified to handle ID/URL as either object or string.
+ * @param {string|Object} spreadsheetId - The ID of the spreadsheet or object with id/url.
  * @return {string[]} Array of sheet names.
  */
 function getSheetNames(spreadsheetId) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    // Extract ID if we received an object
+    let id = spreadsheetId;
+    if (typeof spreadsheetId === 'object' && spreadsheetId.id) {
+      id = spreadsheetId.id;
+    }
+    
+    // Extract ID from URL if necessary
+    const result = extractSpreadsheetId(id);
+    const spreadsheet = SpreadsheetApp.openById(result.id);
     const sheets = spreadsheet.getSheets();
     return sheets.map(sheet => sheet.getName());
   } catch (e) {
@@ -1187,14 +1235,23 @@ function getSheetNames(spreadsheetId) {
 
 /**
  * Gets the column headers from a sheet along with recipient count for the email column.
- * @param {string} spreadsheetId - The ID of the spreadsheet.
+ * Modified to handle ID/URL as either object or string.
+ * @param {string|Object} spreadsheetId - The ID of the spreadsheet or object with id/url.
  * @param {string} sheetName - The name of the sheet.
  * @param {string} emailColumn - Optional email column name to count recipients.
  * @return {Object} Object with headers array and recipientCount.
  */
 function getColumnsAndRecipientCount(spreadsheetId, sheetName, emailColumn) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    // Extract ID if we received an object
+    let id = spreadsheetId;
+    if (typeof spreadsheetId === 'object' && spreadsheetId.id) {
+      id = spreadsheetId.id;
+    }
+    
+    // Extract ID from URL if necessary
+    const result = extractSpreadsheetId(id);
+    const spreadsheet = SpreadsheetApp.openById(result.id);
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) {
       throw new Error("Sheet not found: " + sheetName);
@@ -1225,16 +1282,26 @@ function getColumnsAndRecipientCount(spreadsheetId, sheetName, emailColumn) {
   }
 }
 
+
 /**
  * Gets the recipient count for a specific column.
- * @param {string} spreadsheetId - The ID of the spreadsheet.
+ * Modified to handle ID/URL as either object or string.
+ * @param {string|Object} spreadsheetId - The ID of the spreadsheet or object with id/url.
  * @param {string} sheetName - The name of the sheet.
  * @param {string} emailColumn - The column name containing email addresses.
  * @return {number} The number of recipients.
  */
 function getRecipientCount(spreadsheetId, sheetName, emailColumn) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    // Extract ID if we received an object
+    let id = spreadsheetId;
+    if (typeof spreadsheetId === 'object' && spreadsheetId.id) {
+      id = spreadsheetId.id;
+    }
+    
+    // Extract ID from URL if necessary
+    const result = extractSpreadsheetId(id);
+    const spreadsheet = SpreadsheetApp.openById(result.id);
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) {
       throw new Error("Sheet not found: " + sheetName);
@@ -1303,23 +1370,33 @@ function getEmailQuotaInfo() {
   }
 }
 
+
+
+
+
 /**
- * Gets the spreadsheet data.
- * @param {string} spreadsheetId - The ID of the spreadsheet.
- * @param {string} sheetName - The name of the sheet.
- * @return {Object} An object with headers and rows.
+ * Gets spreadsheet data with consistent ID handling
+ * @param {string|SpreadsheetReference} spreadsheetInput - URL, ID or reference object
+ * @param {string} sheetName - Sheet name to retrieve
+ * @return {Object} The sheet data with headers and rows
  */
-function getSpreadsheetData(spreadsheetId, sheetName) {
+function getSpreadsheetData(spreadsheetInput, sheetName) {
   try {
+    // Always use the helper function to get a clean ID
+    const spreadsheetId = getSpreadsheetId(spreadsheetInput);
+    
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) {
       throw new Error("Sheet not found: " + sheetName);
     }
+    
+    // Rest of the implementation...
     const range = sheet.getDataRange();
     const displayValues = range.getDisplayValues();
     const headers = displayValues[0];
     const rows = displayValues.slice(1);
+    
     return {
       headers: headers,
       rows: rows
@@ -1457,7 +1534,7 @@ function prepareEmailOptions(fromEmail, senderDisplayName, options = {}) {
 
 /**
  * Sends a test email.
- * Updated to use new field names.
+ * Updated to handle the spreadsheetId as either an object or string.
  * @param {string} recipients - Comma-separated list of email addresses.
  * @param {string} subject - The email subject.
  * @param {string} fromEmail - The sender's email address.
@@ -1481,7 +1558,13 @@ function sendTestEmailWithData(recipients, subject, fromEmail, senderDisplayName
     try {
       if (options && options.replacePlaceholders && options.spreadsheetId && options.sheetName) {
         Logger.log('Attempting to replace placeholders');
-        const data = getSpreadsheetData(options.spreadsheetId, options.sheetName);
+        
+        // Extract the ID if we were passed an object with id/url properties
+        const spreadsheetId = typeof options.spreadsheetId === 'object' ? 
+                              options.spreadsheetId.id : 
+                              options.spreadsheetId;
+        
+        const data = getSpreadsheetData(spreadsheetId, options.sheetName);
         if (data.rows.length > 0) {
           const firstRow = data.rows[0];
           subject = replacePlaceholders(subject, data.headers, firstRow);
@@ -1522,8 +1605,8 @@ function sendTestEmailWithData(recipients, subject, fromEmail, senderDisplayName
 
 /**
  * Executes the mail merge with optimized batch processing.
- * Updated to use modern field names and include batch processing.
- * @param {string} spreadsheetId - The ID of the spreadsheet
+ * Updated to handle ID/URL as either object or string.
+ * @param {string|Object} spreadsheetId - The ID/URL of the spreadsheet
  * @param {string} sheetName - The name of the sheet
  * @param {string} emailColumn - The column containing email addresses
  * @param {string} subjectLine - The email subject
@@ -1544,7 +1627,14 @@ function executeMailMerge(spreadsheetId, sheetName, emailColumn, subjectLine, fr
     };
     
     const templateHtml = getDocContent();
-    const data = getSpreadsheetData(spreadsheetId, sheetName);
+    
+    // Extract ID if we received an object
+    let id = spreadsheetId;
+    if (typeof spreadsheetId === 'object' && spreadsheetId.id) {
+      id = spreadsheetId.id;
+    }
+    
+    const data = getSpreadsheetData(id, sheetName);
     const headers = data.headers;
     const rows = data.rows;
     const emailIndex = headers.indexOf(emailColumn);
@@ -1794,6 +1884,7 @@ function getCurrentSidebarValues() {
 
 /**
  * Saves a configuration with specific values.
+ * Modified to preserve full URLs.
  * @param {string} name - The configuration name.
  * @param {Object} values - The values to save.
  * @return {Object} Result with success flag and message.
@@ -1815,7 +1906,7 @@ function saveConfigurationWithValues(name, values) {
       values.documentName = DocumentApp.getActiveDocument().getName();
     }
     
-    // Convert to new field structure
+    // Convert to new field structure - preserve full URL
     const newConfig = {
       templateName: name,
       spreadsheetUrl: values.spreadsheetUrl || "",
@@ -1933,11 +2024,13 @@ function deleteConfiguration(name) {
 
 /**
  * Opens the spreadsheet in a new tab.
+ * Modified to use original URL directly.
  * @param {string} spreadsheetUrl - The spreadsheet URL
  * @return {Object} Result with success flag
  */
 function openSpreadsheet(spreadsheetUrl) {
   try {
+    // Simply return the original URL for opening in browser
     return {
       success: true,
       url: spreadsheetUrl
